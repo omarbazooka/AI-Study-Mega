@@ -14,4 +14,4 @@ Responsibilities:
 Integration:
 Schemas are imported in app/api/ for request parsing and response formatting.
 They mirror app/models/ for database entity representation and are also used
-in app/ai-system/ to validate inputs and outputs passing between components.
+in app/ai_system/ to validate inputs and outputs passing between components.

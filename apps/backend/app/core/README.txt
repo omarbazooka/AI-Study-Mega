@@ -12,6 +12,6 @@ Responsibilities:
 - Define security utilities such as JWT handling and API key validation
 
 Integration:
-All modules across the system (api/, ai-system/, db/, workers/) import
+All modules across the system (api/, ai_system/, db/, workers/) import
 from core/ to access settings, logger instances, and shared dependencies.
 It is the first layer initialized when the application starts up.

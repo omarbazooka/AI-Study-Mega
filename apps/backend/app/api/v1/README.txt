@@ -14,4 +14,4 @@ Responsibilities:
 Integration:
 All routers in this folder are registered in app/api/ and mounted under the /v1 prefix.
 They use schemas from app/schemas/ for request/response models and delegate
-business logic to app/ai-system/ or app/db/ layers.
+business logic to app/ai_system/ or app/db/ layers.

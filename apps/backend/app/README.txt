@@ -12,5 +12,5 @@ Responsibilities:
 - Mount the AI system and background task workers
 
 Integration:
-All sub-packages (api, ai-system, db, workers) are imported and initialized here.
+All sub-packages (api, ai_system, db, workers) are imported and initialized here.
 The main application factory lives in this layer and is consumed by the ASGI server.

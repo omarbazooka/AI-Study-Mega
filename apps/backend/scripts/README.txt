@@ -14,5 +14,5 @@ Responsibilities:
 Integration:
 Scripts import from the app package and use the same configuration defined
 in app/core/. They interact with app/db/ for database operations and may
-trigger ai-system/services/ for batch embedding or ingestion workflows.
+trigger ai_system/services/ for batch embedding or ingestion workflows.
 Designed to be run from the command line with clear argument interfaces.

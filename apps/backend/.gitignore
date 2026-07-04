@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+build/
+dist/
+develop-eggs/
+*.egg-info/
+.installed.cfg
+*.egg
+venv/
+env/
+env.*
+*.venv
+.venv
+
+# Deepeval
+.deepeval/cache/
+
+# Local Environment Secrets
+.env
