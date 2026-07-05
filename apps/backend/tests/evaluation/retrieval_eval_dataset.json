@@ -1,0 +1,14 @@
+﻿[
+  {
+    "query": "explain photosynthesis",
+    "expected_chunk_ids": ["c1"],
+    "expected_page_number": 4,
+    "expected_section_title": "Chapter 2"
+  },
+  {
+    "query": "Ø§Ø´Ø±Ø­ chapter 3",
+    "expected_chunk_ids": [],
+    "expected_page_number": null,
+    "expected_section_title": "Chapter 3"
+  }
+]
