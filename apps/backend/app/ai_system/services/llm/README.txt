@@ -1,4 +1,4 @@
-Folder: backend/app/ai_system/services/llm/
+Folder: backend/app/ai-system/services/llm/
 
 Description:
 This folder provides a unified interface to Large Language Model (LLM) providers.
@@ -12,8 +12,7 @@ Responsibilities:
 - Manage token counting, model selection, and fallback strategies
 
 Integration:
-Called by agents and pipelines after context is assembled by ai_system/context/.
-Prompts are built using templates from ai_system/config/prompts/.
+Called by agents and pipelines after context is assembled by ai-system/context/.
+Prompts are built using templates from ai-system/config/prompts/.
 Outputs flow back to the agent or pipeline for further processing or direct
 API response via app/api/.
-
