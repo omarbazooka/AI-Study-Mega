@@ -35,4 +35,4 @@ def test_memory_contains_context_but_rag_returns_zero_chunks(mock_chunks, mock_d
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "no_answer"
-    assert data["message"] == "الإجابة النهائية غير متاحة حاليًا لأن مرحلة Executor / LLM / RAG لم تكتمل بعد. المعروض الآن هو مخرجات Planner و Orchestrator و Memory فقط."
+    assert data["message"] == "لم أجد إجابة واضحة في الملف المرفوع."

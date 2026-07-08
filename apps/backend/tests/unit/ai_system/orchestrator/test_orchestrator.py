@@ -21,7 +21,8 @@ def mock_db_and_memory():
          patch("app.db.repositories.chat_repository.save_message", new_callable=AsyncMock) as mock_save, \
          patch("app.ai_system.orchestrator.pipeline_registry.memory_retriever.get_memory_context", new_callable=AsyncMock) as mock_ctx, \
          patch("app.ai_system.orchestrator.pipeline_registry.store.save_message", new_callable=AsyncMock) as mock_store_save, \
-         patch("app.ai_system.orchestrator.pipeline_registry.summarizer.summarize_session", new_callable=AsyncMock) as mock_sum:
+         patch("app.ai_system.orchestrator.pipeline_registry.summarizer.summarize_session", new_callable=AsyncMock) as mock_sum, \
+         patch("app.ai_system.orchestrator.pipeline_registry.llm_generate", new_callable=AsyncMock) as mock_llm_gen:
         
         mock_chunks.return_value = [{"id": "chunk-abc", "content": "Photosynthesis process.", "user_id": "u1", "chunk_index": 0}]
         mock_ctx.return_value = MemoryContext(
@@ -31,6 +32,55 @@ def mock_db_and_memory():
             recent_mistakes=[],
             relevant_past=[]
         )
+
+        async def mock_generate_side_effect(payload):
+            from app.ai_system.services.llm.schemas import LLMResponsePayload, LLMUsageMetrics
+            if payload.task_type in ["quiz", "quiz_generation"]:
+                return LLMResponsePayload(
+                    task_id=payload.task_id,
+                    status="success",
+                    output_json={
+                        "quiz_title": "Photosynthesis Quiz",
+                        "difficulty": "medium",
+                        "questions": [
+                            {
+                                "question": "What is photosynthesis?",
+                                "type": "mcq",
+                                "options": ["Option A", "Option B", "Option C", "Option D"],
+                                "correct_answer": "Option A",
+                                "explanation": "Detailed explanation",
+                                "source_chunk_ids": ["chunk-abc"]
+                            }
+                        ]
+                    },
+                    source_chunk_ids=["chunk-abc"],
+                    usage_metrics=LLMUsageMetrics(
+                        provider="groq",
+                        model="llama-3.3-70b-versatile",
+                        key_alias="REASONING_KEY_1",
+                        input_tokens=150,
+                        output_tokens=100,
+                        total_tokens=250,
+                        latency_ms=180
+                    )
+                )
+            return LLMResponsePayload(
+                task_id=payload.task_id,
+                status="success",
+                output_text=f"Grounded response for {payload.task_type}.",
+                source_chunk_ids=["chunk-abc"],
+                usage_metrics=LLMUsageMetrics(
+                    provider="groq",
+                    model="llama-3.1-8b-instant",
+                    key_alias="FAST_KEY_1",
+                    input_tokens=100,
+                    output_tokens=50,
+                    total_tokens=150,
+                    latency_ms=120
+                )
+            )
+        
+        mock_llm_gen.side_effect = mock_generate_side_effect
         yield
 
 
@@ -52,10 +102,10 @@ async def test_orchestrator_single_success():
     assert len(response.tasks) == 1
     assert response.tasks[0].type == TASK_SUMMARY
     assert response.tasks[0].status == "success"
-    assert response.tasks[0].metadata["mock"] is True
-    assert response.tasks[0].confidence == 0.5  # mock confidence
-    assert "الإجابة النهائية غير متاحة حاليًا" in response.message
-    assert len(response.citations) == 0
+    assert response.tasks[0].metadata["mock"] is False
+    assert response.message == "Grounded response for summary."
+    assert len(response.citations) == 1
+    assert response.citations[0].chunk_id == "chunk-abc"
 
 
 @pytest.mark.asyncio
@@ -76,7 +126,11 @@ async def test_orchestrator_parallel_success():
     types = {t.type for t in response.tasks}
     assert TASK_SUMMARY in types
     assert TASK_QUIZ in types
-    assert "الإجابة النهائية غير متاحة حاليًا" in response.message
+    
+    # Assert headers exist in merged response message
+    assert "Summary" in response.message
+    assert "Quiz" in response.message
+    assert "Photosynthesis Quiz" in response.message
 
 
 @pytest.mark.asyncio
@@ -98,13 +152,12 @@ async def test_orchestrator_sequential_with_dependency():
     ans_task = next(t for t in response.tasks if t.type == TASK_ANSWER_TABLE)
     assert ans_task.status == "success"
     assert ans_task.metadata["consumed_quiz_questions"] is True
-    assert "What is the capital of Egypt?" in ans_task.content
+    assert "What is photosynthesis?" in ans_task.content
 
 
 @pytest.mark.asyncio
 async def test_orchestrator_all_no_answer():
     orchestrator = TaskOrchestrator()
-    # Trigger no answer using "outside the file" keyword in query
     plan = ExecutionPlan(
         execution_mode=MODE_SINGLE,
         tasks=[
@@ -115,7 +168,7 @@ async def test_orchestrator_all_no_answer():
 
     response = await orchestrator.execute(plan, req)
     assert response.status == "no_answer"
-    assert "الإجابة النهائية غير متاحة حاليًا" in response.message
+    assert response.message == NO_ANSWER_FALLBACK
     assert response.confidence == 0.0
     assert len(response.citations) == 0
 
@@ -123,7 +176,6 @@ async def test_orchestrator_all_no_answer():
 @pytest.mark.asyncio
 async def test_orchestrator_all_failed_raises_exception():
     orchestrator = TaskOrchestrator()
-    # Use unregistered task type to force failure
     plan = ExecutionPlan(
         execution_mode=MODE_SINGLE,
         tasks=[
@@ -139,7 +191,6 @@ async def test_orchestrator_all_failed_raises_exception():
 @pytest.mark.asyncio
 async def test_orchestrator_partial_failure():
     orchestrator = TaskOrchestrator()
-    # One succeeds, one fails (unregistered type)
     plan = ExecutionPlan(
         execution_mode=MODE_PARALLEL,
         tasks=[
@@ -151,5 +202,5 @@ async def test_orchestrator_partial_failure():
 
     response = await orchestrator.execute(plan, req)
     assert response.status == "partial"
-    assert "الإجابة النهائية غير متاحة حاليًا" in response.message
-    assert response.confidence == 0.0
+    assert response.message == "Grounded response for summary."
+    assert response.confidence == 0.9

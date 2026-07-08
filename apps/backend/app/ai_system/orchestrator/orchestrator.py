@@ -60,7 +60,7 @@ class TaskOrchestrator:
                         citations=[],
                         confidence=0.0,
                         error=str(res),
-                        metadata={"mock": True}
+                        metadata={"mock": False}
                     )
                 else:
                     task_results[task.task_id] = res
@@ -86,7 +86,7 @@ class TaskOrchestrator:
                         citations=[],
                         confidence=0.0,
                         error="Prerequisite task failed or returned no answer.",
-                        metadata={"mock": True}
+                        metadata={"mock": False}
                     )
                 else:
                     result = await self._execute_task(task, request, task_results)
@@ -108,7 +108,7 @@ class TaskOrchestrator:
                 citations=[],
                 confidence=0.0,
                 error=f"No pipeline registered for task type: '{task.type}'",
-                metadata={"mock": True}
+                metadata={"mock": False}
             )
         
         try:
@@ -128,7 +128,7 @@ class TaskOrchestrator:
                 citations=[],
                 confidence=0.0,
                 error=str(e),
-                metadata={"mock": True}
+                metadata={"mock": False}
             )
 
     def _construct_pipeline_trace(self, plan: ExecutionPlan, task_results: Dict[str, TaskResult]) -> Dict[str, Any]:
@@ -161,7 +161,7 @@ class TaskOrchestrator:
             "dag_mode": "not_used",
             "parallel_sequential_hybrid_status": "sequential" if plan.execution_mode == "single" else plan.execution_mode,
             "launched_task_names": [t.type for t in plan.tasks],
-            "retrieval_status": "not_run",
+            "retrieval_status": "temporary_chunk_context_until_rag",
             "verifier_status": "not_run",
             "fallback_used": False
         }
@@ -199,26 +199,64 @@ class TaskOrchestrator:
         results_list = list(task_results.values())
         trace = self._construct_pipeline_trace(plan, task_results)
         
-        # 1. Check for "all no_answer"
-        all_no_answer = all(r.status == "no_answer" for r in results_list)
-        if all_no_answer:
-            return AIResponse(
-                status="no_answer",
-                message="الإجابة النهائية غير متاحة حاليًا لأن مرحلة Executor / LLM / RAG لم تكتمل بعد. المعروض الآن هو مخرجات Planner و Orchestrator و Memory فقط.",
-                execution_mode=plan.execution_mode,
-                tasks=results_list,
-                citations=[],
-                confidence=0.0,
-                metadata={"mock": True},
-                pipeline_trace=trace
-            )
-
-        # 2. Check for "all failed"
+        # 1. Check for "all failed"
         all_failed = all(r.status == "failed" for r in results_list)
         if all_failed:
             raise AllTasksFailedError("ALL_TASKS_FAILED")
 
-        # 3. Consolidate statuses
+        # 2. Check for "all no_answer"
+        all_no_answer = all(r.status == "no_answer" for r in results_list)
+        if all_no_answer:
+            return AIResponse(
+                status="no_answer",
+                message=NO_ANSWER_FALLBACK,
+                execution_mode=plan.execution_mode,
+                tasks=results_list,
+                citations=[],
+                confidence=0.0,
+                metadata={"mock": False},
+                pipeline_trace=trace
+            )
+
+        # 3. Consolidate statuses and content of successful tasks
+        successful_tasks = [r for r in results_list if r.status == "success"]
+
+        if not successful_tasks:
+            # If no tasks succeeded, but some returned no_answer and some failed
+            return AIResponse(
+                status="no_answer",
+                message=NO_ANSWER_FALLBACK,
+                execution_mode=plan.execution_mode,
+                tasks=results_list,
+                citations=[],
+                confidence=0.0,
+                metadata={"mock": False},
+                pipeline_trace=trace
+            )
+
+        if len(successful_tasks) == 1:
+            message = successful_tasks[0].content
+        else:
+            # Multiple successful tasks: join their content with clear section headers
+            parts = []
+            for t in successful_tasks:
+                header = t.type.replace("_", " ").title()
+                parts.append(f"### {header}\n{t.content}")
+            message = "\n\n".join(parts)
+
+        # Collect citations across all task results without duplicates
+        citations_map = {}
+        for r in results_list:
+            if r.citations:
+                for c in r.citations:
+                    if c.chunk_id not in citations_map:
+                        citations_map[c.chunk_id] = c
+                    else:
+                        if c.score > citations_map[c.chunk_id].score:
+                            citations_map[c.chunk_id] = c
+        citations = list(citations_map.values())
+
+        # Consolidate statuses
         has_failed = any(r.status == "failed" for r in results_list)
         has_no_answer = any(r.status == "no_answer" for r in results_list)
         
@@ -229,11 +267,11 @@ class TaskOrchestrator:
 
         return AIResponse(
             status=response_status,
-            message="الإجابة النهائية غير متاحة حاليًا لأن مرحلة Executor / LLM / RAG لم تكتمل بعد. المعروض الآن هو مخرجات Planner و Orchestrator و Memory فقط.",
+            message=message,
             execution_mode=plan.execution_mode,
             tasks=results_list,
-            citations=[],
-            confidence=0.0,
-            metadata={"mock": True},
+            citations=citations,
+            confidence=0.9,
+            metadata={"mock": False},
             pipeline_trace=trace
         )

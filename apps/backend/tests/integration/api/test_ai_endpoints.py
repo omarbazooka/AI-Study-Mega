@@ -11,7 +11,8 @@ def mock_db_and_memory():
          patch("app.db.repositories.chat_repository.save_message", new_callable=AsyncMock) as mock_save, \
          patch("app.ai_system.orchestrator.pipeline_registry.memory_retriever.get_memory_context", new_callable=AsyncMock) as mock_ctx, \
          patch("app.ai_system.orchestrator.pipeline_registry.store.save_message", new_callable=AsyncMock) as mock_store_save, \
-         patch("app.ai_system.orchestrator.pipeline_registry.summarizer.summarize_session", new_callable=AsyncMock) as mock_sum:
+         patch("app.ai_system.orchestrator.pipeline_registry.summarizer.summarize_session", new_callable=AsyncMock) as mock_sum, \
+         patch("app.ai_system.orchestrator.pipeline_registry.llm_generate", new_callable=AsyncMock) as mock_llm_gen:
         
         mock_chunks.return_value = [{"id": "chunk-abc", "content": "Photosynthesis process.", "user_id": "u1", "chunk_index": 0}]
         mock_ctx.return_value = MemoryContext(
@@ -21,6 +22,55 @@ def mock_db_and_memory():
             recent_mistakes=[],
             relevant_past=[]
         )
+
+        async def mock_generate_side_effect(payload):
+            from app.ai_system.services.llm.schemas import LLMResponsePayload, LLMUsageMetrics
+            if payload.task_type in ["quiz", "quiz_generation"]:
+                return LLMResponsePayload(
+                    task_id=payload.task_id,
+                    status="success",
+                    output_json={
+                        "quiz_title": "Photosynthesis Quiz",
+                        "difficulty": "medium",
+                        "questions": [
+                            {
+                                "question": "What is photosynthesis?",
+                                "type": "mcq",
+                                "options": ["Option A", "Option B", "Option C", "Option D"],
+                                "correct_answer": "Option A",
+                                "explanation": "Detailed explanation",
+                                "source_chunk_ids": ["chunk-abc"]
+                            }
+                        ]
+                    },
+                    source_chunk_ids=["chunk-abc"],
+                    usage_metrics=LLMUsageMetrics(
+                        provider="groq",
+                        model="llama-3.3-70b-versatile",
+                        key_alias="REASONING_KEY_1",
+                        input_tokens=150,
+                        output_tokens=100,
+                        total_tokens=250,
+                        latency_ms=180
+                    )
+                )
+            return LLMResponsePayload(
+                task_id=payload.task_id,
+                status="success",
+                output_text=f"Grounded response for {payload.task_type}.",
+                source_chunk_ids=["chunk-abc"],
+                usage_metrics=LLMUsageMetrics(
+                    provider="groq",
+                    model="llama-3.1-8b-instant",
+                    key_alias="FAST_KEY_1",
+                    input_tokens=100,
+                    output_tokens=50,
+                    total_tokens=150,
+                    latency_ms=120
+                )
+            )
+        
+        mock_llm_gen.side_effect = mock_generate_side_effect
         yield
 
 
@@ -65,9 +115,10 @@ def test_chat_endpoint_success(mock_repo):
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "success"
-    assert "الإجابة النهائية غير متاحة حاليًا" in data["message"]
+    assert "Summary" in data["message"]
+    assert "Quiz" in data["message"]
     assert len(data["tasks"]) == 2
-    assert data["confidence"] == 0.0
+    assert data["confidence"] == 0.9
 
 
 @patch("app.ai_system.orchestrator.document_guard.document_repository")
@@ -158,7 +209,7 @@ def test_summary_shortcut_success(mock_repo):
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "success"
-    assert "الإجابة النهائية غير متاحة حاليًا" in data["message"]
+    assert "Grounded response for summary" in data["message"]
     assert len(data["tasks"]) == 1
     assert data["tasks"][0]["type"] == "summary"
 
@@ -182,6 +233,6 @@ def test_quiz_shortcut_success(mock_repo):
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "success"
-    assert "الإجابة النهائية غير متاحة حاليًا" in data["message"]
+    assert "Photosynthesis Quiz" in data["message"]
     assert len(data["tasks"]) == 1
     assert data["tasks"][0]["type"] == "quiz"

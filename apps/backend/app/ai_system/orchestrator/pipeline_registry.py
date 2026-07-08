@@ -1,3 +1,5 @@
+import json
+import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
@@ -17,8 +19,15 @@ from app.ai_system.memory import (
     MemoryRetriever, PersonalizationEngine, build_grounded_prompt,
     MemoryStore, ChatMessage, Summarizer
 )
+from app.ai_system.services.llm.generate import generate as llm_generate
+from app.ai_system.services.llm.schemas import (
+    LLMEngineerPayload, SourceInfo, StrictGroundingPolicy,
+    ExpectedLLMOutputFormat, ChunkContext, MemoryContext
+)
 
-MOCK_CONFIDENCE = 0.5
+logger = logging.getLogger(__name__)
+
+MOCK_CONFIDENCE = 0.9
 
 memory_retriever = MemoryRetriever()
 personalizer = PersonalizationEngine()
@@ -31,19 +40,11 @@ def check_no_answer_trigger(query: str) -> bool:
     return "خارج الملف" in normalized or "outside the file" in normalized
 
 async def execute_common_pipeline_steps(
-    task: Task, request: Any, task_type: str, base_content_ar: str, base_content_en: str
+    task: Task, request: Any, task_type: str, precomputed_content: Optional[str] = None
 ) -> TaskResult:
     """
-    Executes core pipeline steps:
-    1. Check query triggers
-    2. Retrieve chunks (RAG)
-    3. Check empty chunks -> return fallback
-    4. Save user query
-    5. Load memory context
-    6. Construct grounded prompt
-    7. Personalize output
-    8. Save assistant response with chunk traceability
-    9. Run rolling session summaries
+    Executes core pipeline steps using either the real LLM GenerationService
+    or precomputed content (for answer tables).
     """
     # 1. Check intent triggers
     if check_no_answer_trigger(task.query):
@@ -54,7 +55,7 @@ async def execute_common_pipeline_steps(
             content=NO_ANSWER_FALLBACK,
             citations=[],
             confidence=0.0,
-            metadata={"mock": True}
+            metadata={"mock": False, "retrieval_mode": "temporary_chunk_context_until_rag"}
         )
 
     user_id = getattr(request, "user_id", "00000000-0000-0000-0000-000000000000")
@@ -66,7 +67,7 @@ async def execute_common_pipeline_steps(
     chunks = []
     if document_id:
         chunks = await chunk_repository.get_chunks_by_document(document_id)
-        # 3. Check for empty RAG context -> strict fallback
+        # 3. Check for empty RAG context -> strict fallback without calling LLM
         if not chunks:
             return TaskResult(
                 task_id=task.task_id,
@@ -75,7 +76,7 @@ async def execute_common_pipeline_steps(
                 content=NO_ANSWER_FALLBACK,
                 citations=[],
                 confidence=0.0,
-                metadata={"mock": True}
+                metadata={"mock": False, "retrieval_mode": "temporary_chunk_context_until_rag"}
             )
 
     # 4. Save user message to chat database
@@ -88,120 +89,165 @@ async def execute_common_pipeline_steps(
     )
     await store.save_message(user_msg)
 
-    # 5. Fetch student Memory Context
-    memory_context = await memory_retriever.get_memory_context(
-        user_id=user_id,
-        session_id=session_id,
-        source_id=document_id,
-        source_type="document",
-        user_query=task.query
-    )
+    # 5. Temporary context selection
+    # For chat/explain/key_points/comparison_table use first 3 to 5 chunks
+    # For summary/quiz use all chunks (capped at 30 to prevent context overflow)
+    if task_type in [TASK_CHAT_ANSWER, TASK_EXPLAIN, TASK_KEY_POINTS, TASK_COMPARISON_TABLE]:
+        selected_chunks = chunks[:5]
+    else:
+        selected_chunks = chunks[:30]
 
-    # 6. Build final grounding prompt
-    document_context = "\n\n".join(c["content"] for c in chunks[:3])
-    personalization_instructions = personalizer.build_prompt_context_block(
-        memory_context,
-        current_topic=task.metadata.get("topic"),
-        current_query=task.query
-    )
-    
-    # Generate the grounded prompt contract
-    grounded_prompt = build_grounded_prompt(
-        document_context=document_context,
-        memory_context=memory_context,
-        personalization_instructions=personalization_instructions,
-        user_query=task.query
-    )
-    # logger.debug(f"[Prompt Contract]: {grounded_prompt}")
+    # Convert retrieved chunks to ChunkContext Pydantic objects
+    retrieved_context = []
+    chunk_page_map = {}
+    for idx, c in enumerate(selected_chunks):
+        cid = str(c.get("id", idx))
+        page_num = c.get("page_start", 1)
+        chunk_page_map[cid] = page_num
+        retrieved_context.append(
+            ChunkContext(
+                chunk_id=cid,
+                page_number=page_num,
+                score=0.9 - (0.02 * idx),
+                content=c.get("content", "")
+            )
+        )
 
-    # 7. Apply personalization and style adaptations
-    base_content = base_content_ar if lang == "ar" else base_content_en
-    adapted_content = personalizer.adapt_explanation(
-        base_content, memory_context.user_profile, weak_topics=memory_context.weak_topics, topic=task.metadata.get("topic")
-    )
+    # 6. Execute task using precomputed content or LLM generation
+    content_result = ""
+    usage_metrics = None
 
-    # 8. Save assistant response with chunk traceability
-    retrieved_chunk_ids = [str(c["id"]) for c in chunks[:3]]
+    if precomputed_content is not None:
+        content_result = precomputed_content
+        logger.info(f"Using precomputed content for task {task.task_id} (type: {task_type})")
+        source_chunk_ids = [c.chunk_id for c in retrieved_context[:3]]
+    else:
+        # Build LLMEngineerPayload
+        output_type = "text"
+        if task_type == TASK_QUIZ:
+            output_type = "quiz"
+        elif task_type == TASK_SUMMARY:
+            output_type = "summary"
+        elif task_type == TASK_EXPLAIN:
+            output_type = "explanation"
+
+        expected_format = ExpectedLLMOutputFormat(
+            type=output_type,
+            question_count=5 if task_type == TASK_QUIZ else None,
+            must_be_grounded=True,
+            must_not_use_general_knowledge=True
+        )
+
+        memory_payload = MemoryContext(
+            quiz_difficulty=getattr(request, "difficulty", "medium"),
+            preferred_language=lang
+        )
+
+        payload = LLMEngineerPayload(
+            task_id=task.task_id,
+            task_type=task_type,
+            pipeline_type="standard_rag",
+            original_user_query=task.query,
+            task_query=task.query,
+            source=SourceInfo(source_id=str(document_id), source_type="document"),
+            retrieved_document_context=retrieved_context,
+            memory_context=memory_payload,
+            strict_grounding_policy=StrictGroundingPolicy(
+                academic_source_of_truth="retrieved_document_context_only",
+                memory_usage="personalization_only",
+                if_document_context_insufficient=NO_ANSWER_FALLBACK
+            ),
+            expected_llm_output_format=expected_format
+        )
+
+        llm_response = await llm_generate(payload)
+
+        if llm_response.status == "failure":
+            logger.error(f"LLM task execution failed: {llm_response.error_message}")
+            return TaskResult(
+                task_id=task.task_id,
+                type=task_type,
+                status="failure",
+                content="عذراً، فشل النظام في معالجة طلبك.",
+                citations=[],
+                confidence=0.0,
+                metadata={"mock": False, "error": llm_response.error_message}
+            )
+
+        if llm_response.output_text:
+            content_result = llm_response.output_text
+        elif llm_response.output_json:
+            content_result = json.dumps(llm_response.output_json, ensure_ascii=False)
+        
+        source_chunk_ids = llm_response.source_chunk_ids
+        usage_metrics = llm_response.usage_metrics.model_dump() if llm_response.usage_metrics else None
+
+    # 7. Save assistant response
+    retrieved_chunk_ids = [c.chunk_id for c in retrieved_context]
     source_chunk_id = retrieved_chunk_ids[0] if retrieved_chunk_ids else None
 
     await chat_repository.save_message(
         session_id=session_id,
         user_id=user_id,
         role="assistant",
-        content=adapted_content,
+        content=content_result,
         topic=task.metadata.get("topic"),
         retrieved_chunks=retrieved_chunk_ids,
         source_chunk_id=source_chunk_id
     )
 
-    # 9. Rolling summarizer threshold check
-    await summarizer.summarize_session(user_id, session_id, force=False)
-
-    # Build response citations
+    # 8. Build citations
     citations = [
-        Citation(chunk_id=str(c["id"]), page_number=c.get("page_start", 1), score=0.9 - (0.05 * idx))
-        for idx, c in enumerate(chunks[:3])
+        Citation(chunk_id=cid, page_number=chunk_page_map.get(cid, 1), score=0.9)
+        for cid in source_chunk_ids
     ]
 
-    # Collect memory info for trace metadata
-    memory_info = {
-        "academic_level": memory_context.user_profile.academic_level if (memory_context.user_profile and hasattr(memory_context.user_profile, 'academic_level')) else "beginner",
-        "weak_topics": [t.topic for t in memory_context.weak_topics] if memory_context.weak_topics else [],
-        "session_summary": memory_context.session_summary or "None",
-        "has_personalization": personalization_instructions is not None and len(personalization_instructions) > 0,
-        "retrieved_memory_count": len(memory_context.relevant_past) if memory_context.relevant_past else 0
+    metadata = {
+        "mock": False,
+        "document_id": document_id,
+        "retrieval_mode": "temporary_chunk_context_until_rag",
+        "usage_metrics": usage_metrics
     }
+
+    # Quiz questions caching for answer table consumption
+    if task_type == TASK_QUIZ and precomputed_content is None and llm_response.output_json:
+        questions = llm_response.output_json.get("questions", [])
+        result_questions = []
+        for idx, q in enumerate(questions):
+            result_questions.append({
+                "id": f"q{idx+1}",
+                "question": q.get("question"),
+                "options": q.get("options"),
+                "correct": q.get("correct_answer")
+            })
+        metadata["generated_questions"] = result_questions
 
     return TaskResult(
         task_id=task.task_id,
         type=task_type,
-        status="success",
-        content=adapted_content,
+        status="success" if content_result != NO_ANSWER_FALLBACK else "no_answer",
+        content=content_result,
         citations=citations,
         confidence=MOCK_CONFIDENCE,
-        metadata={
-            "mock": True,
-            "document_id": document_id,
-            "retrieved_chunks_count": len(retrieved_chunk_ids),
-            "memory_info": memory_info
-        }
+        metadata=metadata
     )
 
 
 async def run_chat_answer_pipeline(task: Task, request: Any, previous_results: Optional[Dict[str, Any]] = None) -> TaskResult:
     """Localized QA search pipeline using vector chunks (top-k)."""
-    ar_val = f"هذا جواب محاكاة لسؤالك: '{task.query}' استناداً إلى محتوى الملف."
-    en_val = f"This is a simulated answer to your question: '{task.query}' grounded strictly in the document."
-    return await execute_common_pipeline_steps(task, request, TASK_CHAT_ANSWER, ar_val, en_val)
+    return await execute_common_pipeline_steps(task, request, TASK_CHAT_ANSWER)
 
 async def run_explain_pipeline(task: Task, request: Any, previous_results: Optional[Dict[str, Any]] = None) -> TaskResult:
     """Explanation pipeline for a targeted segment."""
-    ar_val = f"شرح مفصل ومبسط للفقرة المطلوبة: '{task.query}'. تم توضيح النقاط الأساسية بلغة واضحة."
-    en_val = f"Detailed explanation for: '{task.query}'. The core points have been clarified in simple terms."
-    return await execute_common_pipeline_steps(task, request, TASK_EXPLAIN, ar_val, en_val)
+    return await execute_common_pipeline_steps(task, request, TASK_EXPLAIN)
 
 async def run_summary_pipeline(task: Task, request: Any, previous_results: Optional[Dict[str, Any]] = None) -> TaskResult:
     """Document-level summary utilizing all chunks."""
-    ar_val = "### ملخص المستند الشامل\n- الفكرة الأولى: هذا ملخص تم إنشاؤه عبر معالجة جميع أجزاء الملف.\n- الفكرة الثانية: تنظيم وهيكلة ممتازة للمفاهيم التعليمية.\n- الفكرة الثالثة: توافق الأهداف التعليمية مع مستويات الطلاب."
-    en_val = "### Document Comprehensive Summary\n- Core Idea 1: This summary is generated by processing all chunks of the document.\n- Core Idea 2: Structured organization of educational concepts.\n- Core Idea 3: Alignment of learning objectives with user profiles."
-    return await execute_common_pipeline_steps(task, request, TASK_SUMMARY, ar_val, en_val)
+    return await execute_common_pipeline_steps(task, request, TASK_SUMMARY)
 
 async def run_quiz_pipeline(task: Task, request: Any, previous_results: Optional[Dict[str, Any]] = None) -> TaskResult:
     """Document-level quiz generator utilizing all chunks."""
-    diff = getattr(request, "difficulty", "medium") or "medium"
-    ar_val = f"### اختبار محاكاة (مستوى: {diff})\n1. ما عاصمة مصر؟\n2. ما الصيغة الكيميائية للماء؟"
-    en_val = f"### Simulated Quiz (Level: {diff})\n1. What is the capital of Egypt?\n2. What is the chemical formula of water?"
-    
-    result = await execute_common_pipeline_steps(task, request, TASK_QUIZ, ar_val, en_val)
-    
-    # Store quiz questions inside task metadata for sequential consumption
-    if result.status == "success":
-        lang = getattr(request, "language", "ar")
-        result.metadata["generated_questions"] = [
-            {"id": "q1", "question": "ما عاصمة مصر؟" if lang == "ar" else "What is the capital of Egypt?", "options": ["القاهرة", "الإسكندرية"] if lang == "ar" else ["Cairo", "Alexandria"], "correct": "القاهرة" if lang == "ar" else "Cairo"},
-            {"id": "q2", "question": "ما الصيغة الكيميائية للماء؟" if lang == "ar" else "What is the chemical formula of water?", "options": ["H2O", "CO2"], "correct": "H2O"}
-        ]
-    return result
+    return await execute_common_pipeline_steps(task, request, TASK_QUIZ)
 
 async def run_answer_table_pipeline(task: Task, request: Any, previous_results: Optional[Dict[str, Any]] = None) -> TaskResult:
     """Generates an answer table based on previous quiz questions."""
@@ -211,7 +257,6 @@ async def run_answer_table_pipeline(task: Task, request: Any, previous_results: 
     questions = []
     if previous_results:
         for res in previous_results.values():
-            # Handle both TaskResult objects and dict results
             metadata = getattr(res, "metadata", {}) or {}
             if not metadata and isinstance(res, dict):
                 metadata = res.get("metadata", {})
@@ -233,28 +278,22 @@ async def run_answer_table_pipeline(task: Task, request: Any, previous_results: 
             rows.append("|---|---|")
             for q in questions:
                 rows.append(f"| {q['question']} | {q['correct']} |")
-        ar_val = "\n".join(rows)
-        en_val = ar_val
-    else:
-        ar_val = "### جدول الإجابات النموذجية\n| السؤال | الإجابة الصحيحة |\n|---|---|\n| السؤال 1 | القاهرة |\n| السؤال 2 | H2O |"
-        en_val = "### Answers Table\n| Question | Correct Answer |\n|---|---|\n| Question 1 | Cairo |\n| Question 2 | H2O |"
-
-    result = await execute_common_pipeline_steps(task, request, TASK_ANSWER_TABLE, ar_val, en_val)
-    if result.status == "success":
-        result.metadata["consumed_quiz_questions"] = True
-    return result
+        table_content = "\n".join(rows)
+        result = await execute_common_pipeline_steps(task, request, TASK_ANSWER_TABLE, precomputed_content=table_content)
+        if result.status == "success":
+            result.metadata["consumed_quiz_questions"] = True
+        return result
+    
+    # If no previous quiz was run, let LLM generate the answer table from scratch
+    return await execute_common_pipeline_steps(task, request, TASK_ANSWER_TABLE)
 
 async def run_key_points_pipeline(task: Task, request: Any, previous_results: Optional[Dict[str, Any]] = None) -> TaskResult:
     """Extracts key points."""
-    ar_val = "### النقاط الرئيسية المستخلصة\n- النقطة الأولى والمحورية.\n- النقطة الثانية والتفصيلية.\n- النقطة الثالثة والأثر التعليمي."
-    en_val = "### Key Takeaways\n- Primary focal point.\n- Secondary detailed point.\n- Educational outcome point."
-    return await execute_common_pipeline_steps(task, request, TASK_KEY_POINTS, ar_val, en_val)
+    return await execute_common_pipeline_steps(task, request, TASK_KEY_POINTS)
 
 async def run_comparison_table_pipeline(task: Task, request: Any, previous_results: Optional[Dict[str, Any]] = None) -> TaskResult:
     """Generates comparison tables."""
-    ar_val = "### جدول مقارنة محاكى\n| الميزة | الموضوع أ | الموضوع ب |\n|---|---|---|\n| التعريف | قيمة أ | قيمة ب |\n| الاستخدام | سياق أ | سياق ب |"
-    en_val = "### Simulated Comparison Table\n| Feature | Topic A | Topic B |\n|---|---|---|\n| Definition | Value A | Value B |\n| Use Case | Context A | Context B |"
-    return await execute_common_pipeline_steps(task, request, TASK_COMPARISON_TABLE, ar_val, en_val)
+    return await execute_common_pipeline_steps(task, request, TASK_COMPARISON_TABLE)
 
 # Global Registry
 PIPELINE_REGISTRY: Dict[str, Any] = {
