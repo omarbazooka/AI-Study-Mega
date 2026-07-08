@@ -1,4 +1,5 @@
-﻿from .keyword_search import KeywordSearch
+﻿import asyncio
+from .keyword_search import KeywordSearch
 from .retrieval_config import RetrievalConfig
 from .schemas import MetadataFilters
 from .vector_store import VectorStore
@@ -19,16 +20,18 @@ class HybridSearch:
         self.keyword_search = keyword_search
         self.config = config
 
-    def search(self, *, user_id, document_id, semantic_query, keyword_query, filters: MetadataFilters, candidate_k=None):
+    async def search(self, *, user_id, document_id, semantic_query, keyword_query, filters: MetadataFilters, candidate_k=None):
         match_count = candidate_k or self.config.candidate_k
-        vector = self.vector_store.search(
-            user_id=user_id, document_id=document_id, query=semantic_query,
-            match_count=match_count, filters=filters,
-            similarity_threshold=self.config.similarity_threshold,
-        )
-        keyword = self.keyword_search.search(
-            user_id=user_id, document_id=document_id, query=keyword_query,
-            match_count=match_count, filters=filters,
+        vector, keyword = await asyncio.gather(
+            self.vector_store.search(
+                user_id=user_id, document_id=document_id, query=semantic_query,
+                match_count=match_count, filters=filters,
+                similarity_threshold=self.config.similarity_threshold,
+            ),
+            self.keyword_search.search(
+                user_id=user_id, document_id=document_id, query=keyword_query,
+                match_count=match_count, filters=filters,
+            ),
         )
         return HybridSearchResult(
             self.merge(vector.chunks, keyword.chunks, filters),

@@ -12,11 +12,13 @@ from app.ai_system.orchestrator.constants import (
     TASK_COMPARISON_TABLE,
     NO_ANSWER_FALLBACK
 )
-from app.db.repositories import chunk_repository, chat_repository
+from app.db.repositories import chat_repository
 from app.ai_system.memory import (
     MemoryRetriever, PersonalizationEngine, build_grounded_prompt,
     MemoryStore, ChatMessage, Summarizer
 )
+from app.ai_system.retrieval import get_document_retriever
+from app.ai_system.retrieval.schemas import RetrievalRequest, RetrievalStatus
 
 MOCK_CONFIDENCE = 0.5
 
@@ -24,6 +26,7 @@ memory_retriever = MemoryRetriever()
 personalizer = PersonalizationEngine()
 store = MemoryStore()
 summarizer = Summarizer()
+document_retriever = get_document_retriever()
 
 def check_no_answer_trigger(query: str) -> bool:
     """Checks if query simulates requesting information outside the document context."""
@@ -62,12 +65,19 @@ async def execute_common_pipeline_steps(
     document_id = getattr(request, "document_id", None)
     lang = getattr(request, "language", "ar")
 
-    # 2. Retrieve document chunks
+    # 2. Retrieve relevant chunks via the RAG retrieval module (hybrid search -> rerank ->
+    #    token-budgeted context build), scoped to this user + document + query.
+    retrieval_result = None
     chunks = []
     if document_id:
-        chunks = await chunk_repository.get_chunks_by_document(document_id)
-        # 3. Check for empty RAG context -> strict fallback
-        if not chunks:
+        retrieval_result = await document_retriever.retrieve(RetrievalRequest(
+            user_id=user_id,
+            document_id=document_id,
+            query=task.query,
+            intent=task_type,
+        ))
+        # 3. Check for empty/unusable RAG context -> strict grounding fallback
+        if retrieval_result.status != RetrievalStatus.FOUND:
             return TaskResult(
                 task_id=task.task_id,
                 type=task_type,
@@ -75,8 +85,18 @@ async def execute_common_pipeline_steps(
                 content=NO_ANSWER_FALLBACK,
                 citations=[],
                 confidence=0.0,
-                metadata={"mock": True}
+                metadata={"mock": True, "retrieval_status": retrieval_result.status.value}
             )
+        # Keep the dict-based `chunks` shape used further below for chat/citation logging,
+        # sourced from the retriever's already-ranked, budget-fit chunks (not a raw dump).
+        chunks = [
+            {
+                "id": c.chunk_id,
+                "content": c.text,
+                "page_start": c.page_number or 1,
+            }
+            for c in retrieval_result.chunks
+        ]
 
     # 4. Save user message to chat database
     user_msg = ChatMessage(
@@ -98,7 +118,7 @@ async def execute_common_pipeline_steps(
     )
 
     # 6. Build final grounding prompt
-    document_context = "\n\n".join(c["content"] for c in chunks[:3])
+    document_context = retrieval_result.context_text if retrieval_result else ""
     personalization_instructions = personalizer.build_prompt_context_block(
         memory_context,
         current_topic=task.metadata.get("topic"),
@@ -121,7 +141,7 @@ async def execute_common_pipeline_steps(
     )
 
     # 8. Save assistant response with chunk traceability
-    retrieved_chunk_ids = [str(c["id"]) for c in chunks[:3]]
+    retrieved_chunk_ids = [str(c["id"]) for c in chunks]
     source_chunk_id = retrieved_chunk_ids[0] if retrieved_chunk_ids else None
 
     await chat_repository.save_message(
@@ -137,11 +157,19 @@ async def execute_common_pipeline_steps(
     # 9. Rolling summarizer threshold check
     await summarizer.summarize_session(user_id, session_id, force=False)
 
-    # Build response citations
+    # Build response citations directly from the retriever's ranked, deduplicated chunks
     citations = [
-        Citation(chunk_id=str(c["id"]), page_number=c.get("page_start", 1), score=0.9 - (0.05 * idx))
-        for idx, c in enumerate(chunks[:3])
+        Citation(chunk_id=c.chunk_id, page_number=c.page_number or 1, score=c.score)
+        for c in (retrieval_result.chunks if retrieval_result else [])
     ]
+
+    # Collect retrieval info for trace metadata
+    retrieval_info = {
+        "status": retrieval_result.status.value if retrieval_result else "not_run",
+        "confidence": retrieval_result.confidence if retrieval_result else 0.0,
+        "chunks_used": len(retrieval_result.chunks) if retrieval_result else 0,
+        "latency_ms": retrieval_result.trace.total_retrieval_latency_ms if retrieval_result else 0,
+    }
 
     # Collect memory info for trace metadata
     memory_info = {
@@ -163,7 +191,8 @@ async def execute_common_pipeline_steps(
             "mock": True,
             "document_id": document_id,
             "retrieved_chunks_count": len(retrieved_chunk_ids),
-            "memory_info": memory_info
+            "memory_info": memory_info,
+            "retrieval_info": retrieval_info
         }
     )
 

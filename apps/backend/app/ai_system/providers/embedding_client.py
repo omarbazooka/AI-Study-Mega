@@ -139,3 +139,12 @@ def embed_texts(texts: List[str]) -> List[List[float]]:
     Convenience function to generate embeddings using the default client.
     """
     return get_embedding_client().embed_texts(texts)
+
+
+def embed_query(text: str) -> List[float]:
+    """
+    Embeds a single query string. Used by app.ai_system.retrieval.vector_store.VectorStore
+    (EmbeddingClientProtocol), which expects a single-vector-out embed_query(text) call.
+    """
+    vectors = embed_texts([text])
+    return vectors[0] if vectors else [0.0] * settings.EMBEDDING_DIMENSIONS

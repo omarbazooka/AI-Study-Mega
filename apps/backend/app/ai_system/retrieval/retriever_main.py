@@ -24,7 +24,7 @@ class DocumentRetriever:
         self.context_builder = context_builder or ContextBuilder()
         self.config = config
 
-    def retrieve(self, request: RetrievalRequest) -> RetrievalResult:
+    async def retrieve(self, request: RetrievalRequest) -> RetrievalResult:
         start = time.perf_counter()
         trace = RetrievalTrace()
         try:
@@ -40,7 +40,7 @@ class DocumentRetriever:
                     trace=trace,
                 ), start)
 
-            hybrid = self.hybrid_search.search(
+            hybrid = await self.hybrid_search.search(
                 user_id=request.user_id,
                 document_id=request.document_id,
                 semantic_query=rewrite.semantic_query,
@@ -111,5 +111,5 @@ class DocumentRetriever:
         return result.copy(update={"trace": trace})
 
 
-def retrieve(request: RetrievalRequest, retriever: DocumentRetriever) -> RetrievalResult:
-    return retriever.retrieve(request)
+async def retrieve(request: RetrievalRequest, retriever: DocumentRetriever) -> RetrievalResult:
+    return await retriever.retrieve(request)

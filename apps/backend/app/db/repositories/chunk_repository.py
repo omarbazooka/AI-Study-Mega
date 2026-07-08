@@ -1,5 +1,8 @@
+import logging
 from typing import List, Dict, Any
 from app.db.supabase_client import get_supabase_client
+
+logger = logging.getLogger(__name__)
 
 # Get the Supabase client
 supabase = get_supabase_client()
@@ -57,3 +60,67 @@ async def get_chunks_by_document(document_id: str) -> List[Dict[str, Any]]:
         .execute()
     )
     return response.data
+
+
+# ── Retrieval module integration ─────────────────────────────────────────────
+# These two methods satisfy VectorChunkRepositoryProtocol / KeywordChunkRepositoryProtocol
+# from app.ai_system.retrieval, and are the bridge between the RAG retrieval module and the
+# real document_chunks table (see migration 005_document_chunk_retrieval.sql for the RPCs).
+
+async def search_vector_chunks(
+    *, user_id: str, document_id: str, query_embedding: List[float],
+    match_count: int, filters: Dict[str, Any], similarity_threshold: float
+) -> List[Dict[str, Any]]:
+    """Semantic vector search over document_chunks, scoped to one user + document."""
+    try:
+        response = supabase.rpc("match_document_chunks", {
+            "query_embedding": query_embedding,
+            "match_threshold": similarity_threshold,
+            "match_count": match_count,
+            "p_user_id": user_id,
+            "p_document_id": document_id,
+        }).execute()
+        rows = response.data or []
+    except Exception as e:
+        logger.error(f"[DB] Vector chunk search failed: {str(e)}")
+        return []
+
+    return [_apply_metadata_filters(row, filters) for row in rows if _apply_metadata_filters(row, filters)]
+
+
+async def search_keyword_chunks(
+    *, user_id: str, document_id: str, query: str,
+    match_count: int, filters: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    """Trigram/ILIKE keyword search over document_chunks, scoped to one user + document."""
+    try:
+        response = supabase.rpc("search_document_chunks_keyword", {
+            "p_query": query,
+            "match_count": match_count,
+            "p_user_id": user_id,
+            "p_document_id": document_id,
+        }).execute()
+        rows = response.data or []
+    except Exception as e:
+        logger.error(f"[DB] Keyword chunk search failed: {str(e)}")
+        return []
+
+    return [_apply_metadata_filters(row, filters) for row in rows if _apply_metadata_filters(row, filters)]
+
+
+def _apply_metadata_filters(row: Dict[str, Any], filters: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Applies any extracted MetadataFilters (page_number, chapter, section_title, ...) as a
+    post-filter, since document_chunks has no section_title column yet — only page_start/
+    page_end and a free-form metadata jsonb blob. Returns the row unchanged if it passes,
+    or {} if it should be excluded.
+    """
+    if not filters:
+        return row
+    page_number = filters.get("page_number")
+    if page_number is not None:
+        page_start = row.get("page_start")
+        page_end = row.get("page_end") or page_start
+        if page_start is None or not (page_start <= page_number <= page_end):
+            return {}
+    return row

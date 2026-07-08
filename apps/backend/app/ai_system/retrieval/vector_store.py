@@ -1,4 +1,6 @@
-﻿import time
+﻿import asyncio
+import inspect
+import time
 from typing import Any, Dict, List, Protocol
 from .retrieval_errors import VectorSearchError
 from .schemas import MetadataFilters, RetrievedChunk
@@ -10,7 +12,7 @@ class EmbeddingClientProtocol(Protocol):
 
 
 class VectorChunkRepositoryProtocol(Protocol):
-    def search_vector_chunks(
+    async def search_vector_chunks(
         self, *, user_id: str, document_id: str, query_embedding: List[float],
         match_count: int, filters: Dict[str, Any], similarity_threshold: float
     ) -> List[Dict[str, Any]]:
@@ -28,10 +30,10 @@ class VectorStore:
         self.repository = repository
         self.embedding_client = embedding_client
 
-    def search(self, *, user_id, document_id, query, match_count, filters: MetadataFilters, similarity_threshold):
+    async def search(self, *, user_id, document_id, query, match_count, filters: MetadataFilters, similarity_threshold):
         start = time.perf_counter()
         try:
-            embedding = self.embedding_client.embed_query(query)
+            embedding = await asyncio.to_thread(self.embedding_client.embed_query, query)
             rows = self.repository.search_vector_chunks(
                 user_id=user_id,
                 document_id=document_id,
@@ -40,6 +42,9 @@ class VectorStore:
                 filters=filters.as_repository_filter(),
                 similarity_threshold=similarity_threshold,
             )
+            if inspect.isawaitable(rows):
+                rows = await rows
+            rows = [row for row in rows if row]
             return VectorSearchResult(
                 [self.row_to_chunk(row, user_id, document_id) for row in rows],
                 int((time.perf_counter() - start) * 1000),
@@ -49,7 +54,7 @@ class VectorStore:
 
     def row_to_chunk(self, row, user_id, document_id):
         metadata = dict(row.get("metadata") or {})
-        page = row.get("page_number") or metadata.get("page_number")
+        page = row.get("page_number") or row.get("page_start") or metadata.get("page_number") or metadata.get("page_start")
         section = row.get("section_title") or metadata.get("section_title")
         score = float(row.get("score", row.get("similarity", 0.0)) or 0.0)
         return RetrievedChunk(

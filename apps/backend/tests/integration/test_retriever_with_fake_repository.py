@@ -1,4 +1,5 @@
-﻿from app.ai_system.retrieval.hybrid_search import HybridSearch
+﻿import pytest
+from app.ai_system.retrieval.hybrid_search import HybridSearch
 from app.ai_system.retrieval.keyword_search import KeywordSearch
 from app.ai_system.retrieval.retrieval_config import RetrievalConfig
 from app.ai_system.retrieval.retriever_main import DocumentRetriever
@@ -60,21 +61,24 @@ def build_retriever(threshold=0.35):
     return DocumentRetriever(hybrid_search=hybrid, config=config)
 
 
-def test_retrieves_known_answer_and_citation():
+@pytest.mark.asyncio
+async def test_retrieves_known_answer_and_citation():
     retriever = build_retriever()
-    result = retriever.retrieve(RetrievalRequest(user_id="user1", document_id="doc1", query="explain photosynthesis"))
+    result = await retriever.retrieve(RetrievalRequest(user_id="user1", document_id="doc1", query="explain photosynthesis"))
     assert result.status == RetrievalStatus.FOUND
     assert result.chunks[0].chunk_id == "c1"
     assert result.citations[0].page_number == 4
 
 
-def test_user_isolation():
+@pytest.mark.asyncio
+async def test_user_isolation():
     retriever = build_retriever()
-    result = retriever.retrieve(RetrievalRequest(user_id="user1", document_id="doc1", query="another user"))
+    result = await retriever.retrieve(RetrievalRequest(user_id="user1", document_id="doc1", query="another user"))
     assert all(chunk.user_id == "user1" for chunk in result.chunks)
 
 
-def test_no_relevant_context():
+@pytest.mark.asyncio
+async def test_no_relevant_context():
     retriever = build_retriever(threshold=0.98)
-    result = retriever.retrieve(RetrievalRequest(user_id="user1", document_id="doc1", query="unrelated"))
+    result = await retriever.retrieve(RetrievalRequest(user_id="user1", document_id="doc1", query="unrelated"))
     assert result.status == RetrievalStatus.NO_RELEVANT_CONTEXT

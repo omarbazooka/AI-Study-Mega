@@ -4,16 +4,27 @@ from unittest.mock import AsyncMock, patch
 from app.main import app
 
 from app.ai_system.memory.memory_types import MemoryContext
+from app.ai_system.retrieval.schemas import RetrievalResult, RetrievalStatus, RetrievedChunk
 
 @pytest.fixture(autouse=True)
 def mock_db_and_memory():
-    with patch("app.db.repositories.chunk_repository.get_chunks_by_document", new_callable=AsyncMock) as mock_chunks, \
+    with patch("app.ai_system.orchestrator.pipeline_registry.document_retriever.retrieve", new_callable=AsyncMock) as mock_retrieve, \
          patch("app.db.repositories.chat_repository.save_message", new_callable=AsyncMock) as mock_save, \
          patch("app.ai_system.orchestrator.pipeline_registry.memory_retriever.get_memory_context", new_callable=AsyncMock) as mock_ctx, \
          patch("app.ai_system.orchestrator.pipeline_registry.store.save_message", new_callable=AsyncMock) as mock_store_save, \
          patch("app.ai_system.orchestrator.pipeline_registry.summarizer.summarize_session", new_callable=AsyncMock) as mock_sum:
-        
-        mock_chunks.return_value = [{"id": "chunk-abc", "content": "Photosynthesis process.", "user_id": "u1", "chunk_index": 0}]
+
+        mock_retrieve.return_value = RetrievalResult(
+            status=RetrievalStatus.FOUND,
+            confidence=0.9,
+            chunks=[
+                RetrievedChunk(
+                    chunk_id="chunk-abc", document_id="doc-ready-123", user_id="u1",
+                    text="Photosynthesis process.", score=0.9, page_number=1,
+                )
+            ],
+            context_text="[Chunk ID: chunk-abc | Page: 1 | Section: unknown | Score: 0.90]\nPhotosynthesis process.",
+        )
         mock_ctx.return_value = MemoryContext(
             user_profile=None,
             session_summary=None,

@@ -188,10 +188,34 @@ class TaskOrchestrator:
             "personalization_applied": personalization_applied
         }
 
+        # 4. Retrieval (RAG) Trace
+        retrieval_status = "not_run"
+        retrieval_confidence = 0.0
+        retrieval_chunks_used = 0
+        retrieval_latency_ms = 0
+        for tr in results_list:
+            if tr.metadata and "retrieval_info" in tr.metadata:
+                r_info = tr.metadata["retrieval_info"]
+                retrieval_status = r_info.get("status", "not_run")
+                retrieval_confidence = r_info.get("confidence", 0.0)
+                retrieval_chunks_used = r_info.get("chunks_used", 0)
+                retrieval_latency_ms = r_info.get("latency_ms", 0)
+                break
+
+        orchestrator_trace["retrieval_status"] = retrieval_status
+
+        retrieval_trace = {
+            "status": retrieval_status,
+            "confidence": retrieval_confidence,
+            "chunks_used": retrieval_chunks_used,
+            "latency_ms": retrieval_latency_ms
+        }
+
         return {
             "planner": planner_trace,
             "orchestrator": orchestrator_trace,
-            "memory": memory_trace
+            "memory": memory_trace,
+            "retrieval": retrieval_trace
         }
 
     def _merge_results(self, task_results: Dict[str, TaskResult], plan: ExecutionPlan) -> AIResponse:
