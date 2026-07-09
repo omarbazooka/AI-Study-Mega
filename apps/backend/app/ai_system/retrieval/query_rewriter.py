@@ -1,4 +1,4 @@
-﻿import re
+import re
 from .schemas import MetadataFilters, QueryRewriteResult
 from .retrieval_errors import QueryRewriteError
 
@@ -75,7 +75,33 @@ class QueryRewriter:
         if section and not section_title:
             section_title = section.group(1).strip()
 
-        return MetadataFilters(page_number=page_number, chapter=chapter, section_title=section_title)
+        extra = {}
+        # Rule-based difficulty extraction
+        diff_match = re.search(r"\b(beginner|easy|مبتدئ|سهل|intermediate|medium|متوسط|advanced|hard|متقدم|صعب)\b", text, re.I)
+        if diff_match:
+            val = diff_match.group(1).lower()
+            if val in ("beginner", "easy", "مبتدئ", "سهل"):
+                extra["difficulty"] = "beginner"
+            elif val in ("intermediate", "medium", "متوسط"):
+                extra["difficulty"] = "intermediate"
+            elif val in ("advanced", "hard", "متقدم", "صعب"):
+                extra["difficulty"] = "advanced"
+
+        # Rule-based question count extraction
+        q_match = re.search(r"(\d+)\s*(?:questions?|أسئلة|سؤال)", text, re.I)
+        if q_match:
+            extra["question_count"] = int(q_match.group(1))
+
+        # Rule-based language extraction
+        lang_match = re.search(r"\b(arabic|ar|عربي|العربية|english|en|إنجليزي|إنجليزية)\b", text, re.I)
+        if lang_match:
+            val = lang_match.group(1).lower()
+            if val in ("arabic", "ar", "عربي", "العربية"):
+                extra["language"] = "ar"
+            elif val in ("english", "en", "إنجليزي", "إنجليزية"):
+                extra["language"] = "en"
+
+        return MetadataFilters(page_number=page_number, chapter=chapter, section_title=section_title, extra=extra)
 
     def merge_filters(self, extracted, provided):
         if provided is None:

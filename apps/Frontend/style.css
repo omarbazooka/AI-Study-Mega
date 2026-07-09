@@ -449,6 +449,7 @@ button:disabled {
 .planner-trace h4 { color: #2196f3; }
 .orchestrator-trace h4 { color: #ff9800; }
 .memory-trace h4 { color: #e91e63; }
+.retrieval-trace h4 { color: #00bcd4; }
 
 .trace-section ul {
     list-style: none;

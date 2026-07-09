@@ -382,6 +382,7 @@ function appendMessage(role, content, citations = [], pipelineTrace = null) {
         const planner = pipelineTrace.planner || {};
         const orchestrator = pipelineTrace.orchestrator || {};
         const memory = pipelineTrace.memory || {};
+        const retrieval = pipelineTrace.retrieval || {};
 
         const tasksList = (planner.tasks || []).map(t => `<li><strong>المهمة:</strong> ${t.type} | <strong>الاستعلام:</strong> "${t.query}"</li>`).join("");
         const selectedPipelines = (orchestrator.selected_pipeline_names || []).join(", ") || "none";
@@ -431,6 +432,15 @@ function appendMessage(role, content, citations = [], pipelineTrace = null) {
                             <li><strong>Memory Layer:</strong> ${memory.memory_layer_checked ? "Checked" : "Not Checked"}</li>
                             <li><strong>Long-term Memories Retrieved:</strong> ${memory.retrieved_count || 0}</li>
                             <li><strong>Personalization:</strong> ${personalizationText}</li>
+                        </ul>
+                    </div>
+                    <div class="trace-section retrieval-trace">
+                        <h4>🔍 الاسترجاع (Retrieval RAG)</h4>
+                        <ul>
+                            <li><strong>Status:</strong> ${retrieval.status || "not_run"}</li>
+                            <li><strong>Confidence:</strong> ${Math.round((retrieval.confidence || 0) * 100)}%</li>
+                            <li><strong>Chunks Sourced:</strong> ${retrieval.chunks_used || 0}</li>
+                            <li><strong>Latency:</strong> ${retrieval.latency_ms || 0}ms</li>
                         </ul>
                     </div>
                 </div>
@@ -487,13 +497,17 @@ function appendTypingIndicator() {
                 <span class="stage-icon loader-circle"></span>
                 <span class="stage-text">تحليل السؤال والتخطيط (Planner)...</span>
             </div>
-            <div class="stage-item pending" id="stage-orchestrator">
+            <div class="stage-item pending" id="stage-retriever">
                 <span class="stage-icon dot"></span>
-                <span class="stage-text">توزيع وتنفيذ المهام (Orchestrator)...</span>
+                <span class="stage-text">استرجاع قطع المستند (Retriever)...</span>
             </div>
-            <div class="stage-item pending" id="stage-memory">
+            <div class="stage-item pending" id="stage-executor">
                 <span class="stage-icon dot"></span>
-                <span class="stage-text">استرجاع وتخصيص الذاكرة (Memory)...</span>
+                <span class="stage-text">توليد وصياغة الإجابة (Executor)...</span>
+            </div>
+            <div class="stage-item pending" id="stage-verifier">
+                <span class="stage-icon dot"></span>
+                <span class="stage-text">التحقق وتدقيق الجودة (Verifier)...</span>
             </div>
         </div>
     `;
@@ -504,36 +518,52 @@ function appendTypingIndicator() {
     // Simulate progress transitions
     const t1 = setTimeout(() => {
         const planner = indicator.querySelector("#stage-planner");
-        const orchestrator = indicator.querySelector("#stage-orchestrator");
-        if (planner && orchestrator) {
+        const retriever = indicator.querySelector("#stage-retriever");
+        if (planner && retriever) {
             planner.classList.remove("loading");
             planner.classList.add("done");
             planner.querySelector(".stage-icon").className = "stage-icon done-check";
             planner.querySelector(".stage-icon").innerHTML = "✓";
             
-            orchestrator.classList.remove("pending");
-            orchestrator.classList.add("loading");
-            orchestrator.querySelector(".stage-icon").className = "stage-icon loader-circle";
+            retriever.classList.remove("pending");
+            retriever.classList.add("loading");
+            retriever.querySelector(".stage-icon").className = "stage-icon loader-circle";
         }
-    }, 700);
+    }, 600);
 
     const t2 = setTimeout(() => {
-        const orchestrator = indicator.querySelector("#stage-orchestrator");
-        const memory = indicator.querySelector("#stage-memory");
-        if (orchestrator && memory) {
-            orchestrator.classList.remove("loading");
-            orchestrator.classList.add("done");
-            orchestrator.querySelector(".stage-icon").className = "stage-icon done-check";
-            orchestrator.querySelector(".stage-icon").innerHTML = "✓";
+        const retriever = indicator.querySelector("#stage-retriever");
+        const executor = indicator.querySelector("#stage-executor");
+        if (retriever && executor) {
+            retriever.classList.remove("loading");
+            retriever.classList.add("done");
+            retriever.querySelector(".stage-icon").className = "stage-icon done-check";
+            retriever.querySelector(".stage-icon").innerHTML = "✓";
             
-            memory.classList.remove("pending");
-            memory.classList.add("loading");
-            memory.querySelector(".stage-icon").className = "stage-icon loader-circle";
+            executor.classList.remove("pending");
+            executor.classList.add("loading");
+            executor.querySelector(".stage-icon").className = "stage-icon loader-circle";
         }
-    }, 1400);
+    }, 1200);
+
+    const t3 = setTimeout(() => {
+        const executor = indicator.querySelector("#stage-executor");
+        const verifier = indicator.querySelector("#stage-verifier");
+        if (executor && verifier) {
+            executor.classList.remove("loading");
+            executor.classList.add("done");
+            executor.querySelector(".stage-icon").className = "stage-icon done-check";
+            executor.querySelector(".stage-icon").innerHTML = "✓";
+            
+            verifier.classList.remove("pending");
+            verifier.classList.add("loading");
+            verifier.querySelector(".stage-icon").className = "stage-icon loader-circle";
+        }
+    }, 1800);
 
     indicator.dataset.timer1 = t1;
     indicator.dataset.timer2 = t2;
+    indicator.dataset.timer3 = t3;
 
     return indicator;
 }
@@ -542,6 +572,7 @@ function removeTypingIndicator(indicatorElement) {
     if (indicatorElement) {
         if (indicatorElement.dataset.timer1) clearTimeout(parseInt(indicatorElement.dataset.timer1));
         if (indicatorElement.dataset.timer2) clearTimeout(parseInt(indicatorElement.dataset.timer2));
+        if (indicatorElement.dataset.timer3) clearTimeout(parseInt(indicatorElement.dataset.timer3));
         if (indicatorElement.parentNode) {
             indicatorElement.parentNode.removeChild(indicatorElement);
         }

@@ -16,19 +16,41 @@ class AIOrchestratorService:
     async def execute_query(self, document_id: str, request: Any, user_id: str) -> AIResponse:
         """
         Validates access to the document, compiles the task plan,
-        and routes execution through the orchestrator.
+        routes execution through the orchestrator, and collects debug trace stages.
         """
-        # Validate existence, ownership, and ingestion status
-        await validate_document_access(document_id, user_id)
+        trace_stages = []
+        request._trace_stages = trace_stages
         
-        # Inject document_id into the request object
-        request.document_id = document_id
+        # 1. Document Guard
+        try:
+            await validate_document_access(document_id, user_id)
+            trace_stages.append({"stage": "document_guard", "status": "passed"})
+        except Exception as e:
+            trace_stages.append({"stage": "document_guard", "status": "failed", "error": str(e)})
+            raise
+            
+        # 2. Input Validation
+        trace_stages.append({"stage": "input_validation", "status": "passed"})
         
-        # Build plan
-        plan = self.planner.plan(request)
-        
+        # 3. Planner
+        try:
+            request.document_id = document_id
+            plan = self.planner.plan(request)
+            intent_val = plan.primary_intent.value if plan.primary_intent else "unknown"
+            trace_stages.append({
+                "stage": "planner",
+                "intent": intent_val,
+                "confidence": plan.confidence
+            })
+        except Exception as e:
+            trace_stages.append({"stage": "planner", "status": "failed", "error": str(e)})
+            raise
+            
         # Execute & return merged response
         response = await self.orchestrator.execute(plan, request)
+        
+        # Set trace stages in metadata
+        response.metadata["trace"] = trace_stages
         return response
 
 # Global process-wide singleton

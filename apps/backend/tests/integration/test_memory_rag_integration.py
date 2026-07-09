@@ -82,7 +82,7 @@ def test_memory_and_retrieval_combine_on_success(
     than operating independently.
     """
     mock_doc.return_value = {
-        "id": "doc-photo-101",
+        "id": "doc-plant-101",
         "user_id": "00000000-0000-0000-0000-000000000000",
         "upload_status": "ready",
         "chunk_count": 12
@@ -96,7 +96,7 @@ def test_memory_and_retrieval_combine_on_success(
         rewritten_query="photosynthesis chloroplast",
         chunks=[
             RetrievedChunk(
-                chunk_id="chunk-1", document_id="doc-photo-101", user_id="00000000-0000-0000-0000-000000000000",
+                chunk_id="chunk-1", document_id="doc-plant-101", user_id="00000000-0000-0000-0000-000000000000",
                 text="Photosynthesis converts light energy into chemical energy.", score=0.91, page_number=4,
             )
         ],
@@ -113,7 +113,7 @@ def test_memory_and_retrieval_combine_on_success(
         "request_source": "chat"
     }
 
-    response = client.post("/api/v1/documents/doc-photo-101/chat", json=payload)
+    response = client.post("/api/v1/documents/doc-plant-101/chat", json=payload)
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "success"

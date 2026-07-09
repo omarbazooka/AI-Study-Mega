@@ -1,4 +1,4 @@
-﻿from enum import Enum
+from enum import Enum
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, validator
 
@@ -86,6 +86,7 @@ class RetrievalTrace(BaseModel):
     rerank_latency_ms: int = 0
     context_build_latency_ms: int = 0
     total_retrieval_latency_ms: int = 0
+    expanded: bool = False
 
 
 class RetrievalResult(BaseModel):

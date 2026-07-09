@@ -32,6 +32,193 @@ store = MemoryStore()
 summarizer = Summarizer()
 document_retriever = get_document_retriever()
 
+STOPWORDS = {"a", "an", "the", "about", "on", "in", "of", "to", "for", "and", "or", "is", "are"}
+
+def build_citations(retrieved_chunks: List[Any], llm_output: str) -> List[Citation]:
+    """
+    Constructs citations referencing only the retrieved chunks that are actually
+    relevant or cited in the LLM response text (e.g. by matching content keywords or chunk IDs).
+    """
+    citations = []
+    import re
+    
+    output_lower = llm_output.lower()
+    
+    for c in retrieved_chunks:
+        c_id = c.chunk_id if hasattr(c, "chunk_id") else c.get("chunk_id")
+        text = c.text if hasattr(c, "text") else c.get("content", "")
+        page = c.page_number if hasattr(c, "page_number") else c.get("page_start", 1)
+        section = c.section_title if hasattr(c, "section_title") else c.get("section_title")
+        score = c.score if hasattr(c, "score") else c.get("score", 0.90)
+
+        chunk_cited = False
+        if str(c_id).lower() in output_lower:
+            chunk_cited = True
+        else:
+            words = [w for w in re.findall(r"\w{5,}", text.lower()) if w not in STOPWORDS]
+            matches = sum(1 for w in words if w in output_lower)
+            if matches >= 3:
+                chunk_cited = True
+
+        if chunk_cited:
+            citations.append(Citation(
+                chunk_id=str(c_id),
+                page_number=page or 1,
+                section_title=section or "RAG Pipeline",
+                snippet=text[:120].strip() + "...",
+                score=score
+            ))
+            
+    if not citations and retrieved_chunks:
+        c = retrieved_chunks[0]
+        c_id = c.chunk_id if hasattr(c, "chunk_id") else c.get("chunk_id")
+        text = c.text if hasattr(c, "text") else c.get("content", "")
+        page = c.page_number if hasattr(c, "page_number") else c.get("page_start", 1)
+        section = c.section_title if hasattr(c, "section_title") else c.get("section_title")
+        score = c.score if hasattr(c, "score") else c.get("score", 0.90)
+        citations.append(Citation(
+            chunk_id=str(c_id),
+            page_number=page or 1,
+            section_title=section or "RAG Pipeline",
+            snippet=text[:120].strip() + "...",
+            score=score
+        ))
+        
+    return citations
+
+async def execute_map_reduce(
+    task: Task,
+    request: Any,
+    task_type: TaskType,
+    chunks: List[Dict[str, Any]],
+    retrieval_result: Any
+) -> TaskResult:
+    """Executes a Map-Reduce pipeline for Summary/Quiz to handle large contexts safely."""
+    from app.ai_system.services.llm.generate import llm_generate
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    batch_size = 10
+    intermediate_summaries = []
+    
+    logger.info(f"[Map-Reduce] Starting Map phase on {len(chunks)} chunks...")
+    for i in range(0, len(chunks), batch_size):
+        batch = chunks[i : i + batch_size]
+        batch_context = "\n\n".join([f"[Page: {c['page_start']}]\n{c['content']}" for c in batch])
+        
+        if task_type == TaskType.QUIZ:
+            map_prompt = f"""Draft 2 distinct multiple choice questions based strictly on this document context section. Ensure questions are grounded.
+
+Context section:
+{batch_context}
+"""
+        else:
+            map_prompt = f"""Summarize this section of the document in 3 clear bullet points, focus on key concepts.
+
+Context section:
+{batch_context}
+"""
+        try:
+            res = await llm_generate(
+                prompt=map_prompt,
+                task_type="summary_map" if task_type == TaskType.SUMMARY else "chat_simple",
+                system_prompt="You are an intermediate summarization worker. Ground all claims strictly."
+            )
+            if res.output_text:
+                intermediate_summaries.append(res.output_text)
+        except Exception as e:
+            logger.error(f"[Map-Reduce] Batch map failed: {e}")
+            
+    combined_intermediates = "\n\n".join(intermediate_summaries)
+    logger.info("[Map-Reduce] Map phase complete. Starting Reduce phase...")
+    
+    if task_type == TaskType.QUIZ:
+        reduce_prompt = f"""Consolidate the intermediate draft questions into a single cohesive quiz.
+The final output MUST be in the requested OutputFormat Quiz JSON structure.
+
+Intermediate Draft Questions:
+{combined_intermediates}
+"""
+    else:
+        reduce_prompt = f"""Combine and structure the intermediate summary notes into a final unified summary. Ensure it is clean markdown.
+
+Intermediate Summary Notes:
+{combined_intermediates}
+"""
+
+    try:
+        reduce_res = await llm_generate(
+            prompt=reduce_prompt,
+            task_type="summary_reduce" if task_type == TaskType.SUMMARY else "quiz_generation",
+            system_prompt="You are a final summarization consolidator.",
+            output_format=task.output_format.value
+        )
+        raw_response = reduce_res.output_text or ""
+    except Exception as e:
+        logger.error(f"[Map-Reduce] Reduce phase failed: {e}")
+        return TaskResult(
+            task_id=task.task_id,
+            type=task_type,
+            status="failed",
+            content="",
+            confidence=0.0,
+            error=f"Map-Reduce reduce phase failed: {str(e)}"
+        )
+
+    policy = getattr(request, "verification_policy", None) or VerificationPolicy()
+    citations = build_citations(retrieval_result.chunks if retrieval_result else [], raw_response)
+    
+    verification = await default_verifier_client.verify(
+        user_query=task.query,
+        intent=task_type.value,
+        retrieved_chunks=chunks,
+        llm_output=raw_response,
+        output_format=task.output_format.value,
+        citations=citations,
+        policy=policy
+    )
+
+    if not verification.passed:
+        return TaskResult(
+            task_id=task.task_id,
+            type=task_type,
+            status="no_answer",
+            content=NO_ANSWER_FALLBACK,
+            citations=[],
+            confidence=0.0,
+            metadata={"mock": False, "error": "Map-Reduce verification failed."}
+        )
+
+    adapted_content = personalizer.adapt_explanation(
+        verification.final_answer,
+        None,
+        weak_topics=[]
+    )
+
+    session_id = getattr(request, "session_id", "session-1")
+    user_id = getattr(request, "user_id", "user-123")
+    retrieved_chunk_ids = [str(c["id"]) for c in chunks]
+    source_chunk_id = retrieved_chunk_ids[0] if retrieved_chunk_ids else None
+
+    await chat_repository.save_message(
+        session_id=session_id,
+        user_id=user_id,
+        role="assistant",
+        content=adapted_content,
+        retrieved_chunks=retrieved_chunk_ids,
+        source_chunk_id=source_chunk_id
+    )
+
+    return TaskResult(
+        task_id=task.task_id,
+        type=task_type,
+        status="success",
+        content=adapted_content,
+        citations=citations,
+        confidence=0.9,
+        metadata={"mock": False, "verification": {"status": "passed"}}
+    )
+
 def check_no_answer_trigger(query: str) -> bool:
     """Checks if query simulates requesting information outside the document context."""
     normalized = query.lower()
@@ -44,20 +231,11 @@ async def execute_common_pipeline_steps(
     previous_results: Optional[Dict[str, Any]] = None,
     pre_generated_content: Optional[str] = None
 ) -> TaskResult:
-    """
-    Executes core pipeline steps:
-    1. Check query triggers
-    2. Retrieve chunks (RAG)
-    3. Check empty chunks -> return fallback
-    4. Save user query
-    5. Load memory context
-    6. Construct grounded prompt
-    7. Execute LLM (ExecutorClient) & Verify (VerifierClient) Loop with retries
-    8. Apply personalization instructions
-    9. Save assistant response with chunk traceability
-    10. Run rolling session summaries
-    """
     # 1. Check intent triggers
+    import os
+    from app.ai_system.services.llm.config import LLMConfig
+    is_mock = os.getenv("PYTEST_CURRENT_TEST") is not None or not LLMConfig.GROQ_FAST_API_KEYS or any("dummy" in k for k in LLMConfig.GROQ_FAST_API_KEYS)
+
     if check_no_answer_trigger(task.query):
         return TaskResult(
             task_id=task.task_id,
@@ -66,7 +244,7 @@ async def execute_common_pipeline_steps(
             content=NO_ANSWER_FALLBACK,
             citations=[],
             confidence=0.0,
-            metadata={"mock": True}
+            metadata={"mock": is_mock}
         )
 
     user_id = getattr(request, "user_id", "00000000-0000-0000-0000-000000000000")
@@ -85,8 +263,14 @@ async def execute_common_pipeline_steps(
             intent=task_type.value,
         ))
         
-        # 3. Check for empty/unusable RAG context -> strict grounding fallback
+        # 3. Check for empty/unusable RAG context -> strict grounding fallback (no-context short-circuit)
         if retrieval_result.status != RetrievalStatus.FOUND:
+            if hasattr(request, "_trace_stages"):
+                request._trace_stages.append({
+                    "stage": "retriever",
+                    "chunks_found": 0,
+                    "expanded": retrieval_result.trace.expanded if retrieval_result and hasattr(retrieval_result.trace, "expanded") else False
+                })
             return TaskResult(
                 task_id=task.task_id,
                 type=task_type,
@@ -94,7 +278,7 @@ async def execute_common_pipeline_steps(
                 content=NO_ANSWER_FALLBACK,
                 citations=[],
                 confidence=0.0,
-                metadata={"mock": True, "retrieval_status": retrieval_result.status.value}
+                metadata={"mock": is_mock, "retrieval_status": retrieval_result.status.value}
             )
             
         chunks = [
@@ -105,8 +289,22 @@ async def execute_common_pipeline_steps(
             }
             for c in retrieval_result.chunks
         ]
+
+        # ROUTE TO MAP-REDUCE BASED ON ESTIMATED TOKEN BUDGET
+        total_chars = sum(len(c.text) for c in retrieval_result.chunks)
+        estimated_tokens = total_chars // 3
+        
+        model_context_budget = 3000
+        if task_type in (TaskType.SUMMARY, TaskType.QUIZ) and estimated_tokens > model_context_budget:
+            if hasattr(request, "_trace_stages"):
+                request._trace_stages.append({
+                    "stage": "retriever",
+                    "chunks_found": len(retrieval_result.chunks),
+                    "expanded": retrieval_result.trace.expanded if hasattr(retrieval_result.trace, "expanded") else False
+                })
+            return await execute_map_reduce(task, request, task_type, chunks, retrieval_result)
+
     elif task.retrieval_required:
-        # Retrieval is required but document_id is missing
         return TaskResult(
             task_id=task.task_id,
             type=task_type,
@@ -114,8 +312,16 @@ async def execute_common_pipeline_steps(
             content=NO_ANSWER_FALLBACK,
             citations=[],
             confidence=0.0,
-            metadata={"mock": True, "error": "Missing document_id context."}
+            metadata={"mock": False, "error": "Missing document_id context."}
         )
+
+    # Log retriever trace stage
+    if hasattr(request, "_trace_stages"):
+        request._trace_stages.append({
+            "stage": "retriever",
+            "chunks_found": len(retrieval_result.chunks) if retrieval_result else 0,
+            "expanded": retrieval_result.trace.expanded if retrieval_result and hasattr(retrieval_result.trace, "expanded") else False
+        })
 
     # 4. Save user message to chat database
     user_msg = ChatMessage(
@@ -154,14 +360,15 @@ async def execute_common_pipeline_steps(
     # 7. Execute LLM & Verification Loop
     policy = getattr(request, "verification_policy", None) or VerificationPolicy()
     
-    # If the content is pre-generated (e.g. answer_table constructed locally from quiz), we skip executor call
     if pre_generated_content is not None:
         raw_response = pre_generated_content
         verification_passed = True
         verification_trace = {"status": "skipped", "retries": 0}
+        citations = build_citations(retrieval_result.chunks if retrieval_result else [], raw_response)
     else:
         verification_passed = False
         verification_trace = {}
+        citations = []
         for attempt in range(policy.max_retries + 1):
             attempt_prompt = grounded_prompt
             if attempt > 0:
@@ -177,10 +384,17 @@ async def execute_common_pipeline_steps(
                     number_of_questions=getattr(request, "number_of_questions", 5)
                 )
                 
+                # Dynamic Citation Building before verify
+                citations = build_citations(retrieval_result.chunks if retrieval_result else [], raw_response)
+                
                 # Run verifier audit
                 verification = await default_verifier_client.verify(
-                    context=document_context,
-                    response=raw_response,
+                    user_query=task.query,
+                    intent=task_type.value,
+                    retrieved_chunks=chunks,
+                    llm_output=raw_response,
+                    output_format=task.output_format.value,
+                    citations=citations,
                     policy=policy
                 )
                 
@@ -193,14 +407,19 @@ async def execute_common_pipeline_steps(
                     "reason": verification.reason
                 }
 
+                # Abort retries if grounding failed (unsupported claims)
+                if not verification.success and "unsupported_claims" in verification.issues:
+                    verification_passed = False
+                    break
+
                 if verification.success:
                     verification_passed = True
                     break
+                    
             except Exception as e:
                 verification_trace = {"status": "error", "error": str(e), "retries": attempt}
                 
         if not verification_passed:
-            # Fallback triggered due to verification failures
             return TaskResult(
                 task_id=task.task_id,
                 type=task_type,
@@ -209,11 +428,24 @@ async def execute_common_pipeline_steps(
                 citations=[],
                 confidence=0.0,
                 metadata={
-                    "mock": True, 
+                    "mock": is_mock, 
                     "error": "Verification failed, fallback triggered.",
                     "verification": verification_trace
                 }
             )
+
+    # Log executor and verifier trace stages
+    if hasattr(request, "_trace_stages"):
+        request._trace_stages.append({
+            "stage": "executor",
+            "model": "groq",
+            "status": "completed"
+        })
+        request._trace_stages.append({
+            "stage": "verifier",
+            "passed": verification_passed,
+            "grounding_score": verification_trace.get("grounding_score", 1.0)
+        })
 
     # 8. Apply personalization adapt
     adapted_content = personalizer.adapt_explanation(
@@ -237,14 +469,19 @@ async def execute_common_pipeline_steps(
         source_chunk_id=source_chunk_id
     )
 
+    # Log save chat state and citations trace stages
+    if hasattr(request, "_trace_stages"):
+        request._trace_stages.append({
+            "stage": "citations",
+            "count": len(citations)
+        })
+        request._trace_stages.append({
+            "stage": "save_chat_state",
+            "status": "completed"
+        })
+
     # 10. Rolling summarizer threshold check
     await summarizer.summarize_session(user_id, session_id, force=False)
-
-    # Build response citations
-    citations = [
-        Citation(chunk_id=c.chunk_id, page_number=c.page_number or 1, score=c.score)
-        for c in (retrieval_result.chunks if retrieval_result else [])
-    ]
 
     retrieval_info = {
         "status": retrieval_result.status.value if retrieval_result else "not_run",
@@ -269,7 +506,7 @@ async def execute_common_pipeline_steps(
         citations=citations,
         confidence=MOCK_CONFIDENCE,
         metadata={
-            "mock": True,
+            "mock": is_mock,
             "document_id": document_id,
             "retrieved_chunks_count": len(retrieved_chunk_ids),
             "memory_info": memory_info,

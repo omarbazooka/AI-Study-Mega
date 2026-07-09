@@ -1,4 +1,4 @@
-﻿import time
+import time
 from .context_builder import ContextBuilder
 from .hybrid_search import HybridSearch
 from .query_rewriter import QueryRewriter
@@ -40,22 +40,52 @@ class DocumentRetriever:
                     trace=trace,
                 ), start)
 
-            hybrid = await self.hybrid_search.search(
-                user_id=request.user_id,
-                document_id=request.document_id,
-                semantic_query=rewrite.semantic_query,
-                keyword_query=rewrite.keyword_query,
-                filters=rewrite.filters,
-                candidate_k=self.config.candidate_k,
+            # Define attempts to retry retrieval with relaxed thresholds inside the same document
+            from .schemas import MetadataFilters
+            attempts = [
+                (self.config.similarity_threshold, self.config.candidate_k, True),         # Attempt 1: Standard (0.55 / limit 4)
+                (0.40, self.config.candidate_k * 2, True),                                 # Attempt 2: Relaxed threshold (0.40 / limit 8)
+                (0.25, self.config.candidate_k * 4, True),                                 # Attempt 3: Deep search threshold (0.25 / limit 16)
+            ]
+
+            # If user has strict filters, allow Attempt 3 with those filters stripped
+            has_strict_filters = (
+                rewrite.filters.page_number is not None
+                or rewrite.filters.chapter is not None
+                or rewrite.filters.section_title is not None
             )
+            if has_strict_filters:
+                attempts.append((0.20, self.config.candidate_k * 2, False))
 
-            trace.vector_results = hybrid.vector_count
-            trace.keyword_results = hybrid.keyword_count
-            trace.hybrid_candidates = len(hybrid.chunks)
-            trace.vector_search_latency_ms = hybrid.vector_latency_ms
-            trace.keyword_search_latency_ms = hybrid.keyword_latency_ms
+            candidates = []
+            trace.expanded = False
 
-            candidates = [chunk for chunk in hybrid.chunks if chunk.score >= self.config.similarity_threshold]
+            for attempt_idx, (threshold, candidate_k, use_filters) in enumerate(attempts):
+                if attempt_idx > 0:
+                    trace.expanded = True
+
+                filters_to_use = rewrite.filters if use_filters else MetadataFilters()
+
+                hybrid = await self.hybrid_search.search(
+                    user_id=request.user_id,
+                    document_id=request.document_id,
+                    semantic_query=rewrite.semantic_query,
+                    keyword_query=rewrite.keyword_query,
+                    filters=filters_to_use,
+                    candidate_k=candidate_k,
+                )
+
+                # Filter chunks meeting this attempt's threshold
+                attempt_candidates = [chunk for chunk in hybrid.chunks if chunk.score >= threshold]
+                if attempt_candidates:
+                    candidates = attempt_candidates
+                    trace.vector_results = hybrid.vector_count
+                    trace.keyword_results = hybrid.keyword_count
+                    trace.hybrid_candidates = len(hybrid.chunks)
+                    trace.vector_search_latency_ms = hybrid.vector_latency_ms
+                    trace.keyword_search_latency_ms = hybrid.keyword_latency_ms
+                    break
+
             if not candidates:
                 return self.finish(RetrievalResult(
                     status=RetrievalStatus.NO_RELEVANT_CONTEXT,
@@ -89,17 +119,24 @@ class DocumentRetriever:
                 ), start)
 
             confidence = self.confidence(context.chunks[0].score, len(context.chunks), top_k)
+            
+            # Map Supabase RPC retrieval citations if missing or create standard citations
+            from .schemas import Citation
+            citations = []
+            for c in context.chunks:
+                citations.append(Citation(chunk_id=c.chunk_id, page_number=c.page_number or 1, section_title=c.section_title))
+
             return self.finish(RetrievalResult(
                 status=RetrievalStatus.FOUND,
                 confidence=confidence,
                 rewritten_query=rewrite.semantic_query,
                 chunks=context.chunks,
                 context_text=context.context_text,
-                citations=context.citations,
+                citations=citations,
                 trace=trace,
             ), start)
 
-        except RetrievalError as exc:
+        except Exception as exc:
             return self.finish(RetrievalResult(status=RetrievalStatus.ERROR, reason=str(exc), trace=trace), start)
 
     def confidence(self, best_score, selected_count, top_k):

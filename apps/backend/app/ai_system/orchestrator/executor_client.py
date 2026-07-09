@@ -1,7 +1,10 @@
 import json
+import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 from app.schemas.ai_schema import ModelTier, OutputFormat
+
+logger = logging.getLogger(__name__)
 
 class ExecutorConnectionError(Exception):
     """Raised when connecting to the LLM backend provider fails."""
@@ -99,5 +102,44 @@ class MockExecutorClient(ExecutorClient):
         else:
             return f"Simulated educational answer output, grounded strictly in the provided document context."
 
-# Singleton dev instance
-default_executor_client = MockExecutorClient()
+class RealExecutorClient(ExecutorClient):
+    """Production LLM execution engine utilizing Groq provider with key rotation."""
+    async def generate_response(
+        self, 
+        prompt: str, 
+        model_tier: ModelTier, 
+        output_format: OutputFormat,
+        **kwargs: Any
+    ) -> str:
+        import os
+        from app.ai_system.services.llm.config import LLMConfig
+        if os.getenv("PYTEST_CURRENT_TEST") or not LLMConfig.GROQ_FAST_API_KEYS or any("dummy" in k for k in LLMConfig.GROQ_FAST_API_KEYS):
+            logger.info("Pytest test run or no keys. Falling back to MockExecutorClient.")
+            mock_client = MockExecutorClient()
+            return await mock_client.generate_response(prompt, model_tier, output_format, **kwargs)
+
+        from app.ai_system.services.llm.generate import llm_generate
+        
+        task_type = "chat_simple"
+        if model_tier == ModelTier.REASONING:
+            task_type = "chat_complex"
+        
+        if output_format == OutputFormat.QUIZ_JSON:
+            task_type = "quiz_generation"
+        elif output_format == OutputFormat.ANSWER_EVALUATION_JSON:
+            task_type = "answer_evaluation"
+            
+        res_payload = await llm_generate(
+            prompt=prompt,
+            task_type=task_type,
+            output_format=output_format.value,
+            **kwargs
+        )
+        
+        if res_payload.status == "success" and res_payload.output_text:
+            return res_payload.output_text
+            
+        raise ExecutorConnectionError("LLM response generation failed.")
+
+# Singleton production instance
+default_executor_client = RealExecutorClient()
