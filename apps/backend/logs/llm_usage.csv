@@ -1,0 +1,16 @@
+timestamp,user_id,document_id,task_type,provider,model,key_alias,input_tokens,output_tokens,total_tokens,latency_ms,status,error_type,prompt_version,estimated_cost_usd
+2026-07-09T21:51:05.760649+00:00,system,doc_1,chat_simple,groq,llama-3.1-8b-instant,FAST_KEY_1,10,5,15,100,success,,v1,0.000001
+2026-07-09T21:51:05.766005+00:00,system,doc_1,quiz_generation,groq,llama-3.3-70b-versatile,REASONING_KEY_1,25,25,50,250,success,,v1,0.000034
+2026-07-09T21:52:47.953308+00:00,system,doc-photo-101,chat_answer,groq,llama-3.1-8b-instant,FAST_KEY_1,259,165,424,3815,success,,v1,0.000026
+2026-07-09T21:52:49.886055+00:00,system,doc-photo-101,chat_answer,groq,llama-3.1-8b-instant,FAST_KEY_1,283,17,300,1931,success,,v1,0.000016
+2026-07-09T21:53:21.701192+00:00,system,doc-photo-101,summary,groq,llama-3.1-8b-instant,SUMMARY_KEY_1,3947,17,3964,1076,success,,v1,0.000199
+2026-07-09T21:53:21.782570+00:00,system,doc_1,chat_simple,groq,llama-3.1-8b-instant,FAST_KEY_1,10,5,15,100,success,,v1,0.000001
+2026-07-09T21:53:21.787307+00:00,system,doc_1,quiz_generation,groq,llama-3.3-70b-versatile,REASONING_KEY_1,25,25,50,250,success,,v1,0.000034
+2026-07-09T21:57:04.399026+00:00,system,doc_1,chat_simple,groq,llama-3.1-8b-instant,FAST_KEY_1,10,5,15,100,success,,v1,0.000001
+2026-07-09T21:57:04.404147+00:00,system,doc_1,quiz_generation,groq,llama-3.3-70b-versatile,REASONING_KEY_1,25,25,50,250,success,,v1,0.000034
+2026-07-09T21:58:42.831465+00:00,system,doc_1,chat_simple,groq,llama-3.1-8b-instant,FAST_KEY_1,10,5,15,100,success,,v1,0.000001
+2026-07-09T21:58:42.835946+00:00,system,doc_1,quiz_generation,groq,llama-3.3-70b-versatile,REASONING_KEY_1,25,25,50,250,success,,v1,0.000034
+2026-07-09T22:03:20.293005+00:00,system,doc_1,chat_simple,groq,llama-3.1-8b-instant,FAST_KEY_1,10,5,15,100,success,,v1,0.000001
+2026-07-09T22:03:20.299055+00:00,system,doc_1,quiz_generation,groq,llama-3.3-70b-versatile,REASONING_KEY_1,25,25,50,250,success,,v1,0.000034
+2026-07-09T22:10:12.301731+00:00,system,doc_1,chat_simple,groq,llama-3.1-8b-instant,FAST_KEY_1,10,5,15,100,success,,v1,0.000001
+2026-07-09T22:10:12.307007+00:00,system,doc_1,quiz_generation,groq,llama-3.3-70b-versatile,REASONING_KEY_1,25,25,50,250,success,,v1,0.000034
