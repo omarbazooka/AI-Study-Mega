@@ -8,8 +8,9 @@ def sample_chunks():
         RetrievedChunk(chunk_id="c1", text="Python is a programming language created in 1991.")
     ]
 
-def test_hallucination_fully_grounded(monkeypatch, sample_chunks):
-    def mock_llm_judge(*args, **kwargs):
+@pytest.mark.asyncio
+async def test_hallucination_fully_grounded(monkeypatch, sample_chunks):
+    async def mock_llm_judge(*args, **kwargs):
         return {
             "grounded": True,
             "grounding_score": 1.0,
@@ -17,27 +18,30 @@ def test_hallucination_fully_grounded(monkeypatch, sample_chunks):
         }
     monkeypatch.setattr("app.ai_system.validation.hallucination_checker._llm_judge_check", mock_llm_judge)
     
-    result = check_hallucination("What is Python?", "Python is a programming language.", sample_chunks)
+    result = await check_hallucination("What is Python?", "Python is a programming language.", sample_chunks)
     assert result.grounded is True
 
-def test_hallucination_with_unsupported_number(monkeypatch, sample_chunks):
-    def mock_llm_judge(*args, **kwargs):
+@pytest.mark.asyncio
+async def test_hallucination_with_unsupported_number(monkeypatch, sample_chunks):
+    async def mock_llm_judge(*args, **kwargs):
         return {"grounded": False, "grounding_score": 0.5, "suggested_action": "regenerate"}
     monkeypatch.setattr("app.ai_system.validation.hallucination_checker._llm_judge_check", mock_llm_judge)
 
     # 1995 is not in context (1991 is)
-    result = check_hallucination("When was it created?", "Created in 1995.", sample_chunks)
+    result = await check_hallucination("When was it created?", "Created in 1995.", sample_chunks)
     assert any("1995" in reason for reason in result.reasons)
 
-def test_hallucination_with_forbidden_phrase(monkeypatch, sample_chunks):
-    def mock_llm_judge(*args, **kwargs):
+@pytest.mark.asyncio
+async def test_hallucination_with_forbidden_phrase(monkeypatch, sample_chunks):
+    async def mock_llm_judge(*args, **kwargs):
         return {"grounded": False, "grounding_score": 0.5, "suggested_action": "regenerate"}
     monkeypatch.setattr("app.ai_system.validation.hallucination_checker._llm_judge_check", mock_llm_judge)
 
-    result = check_hallucination("Tell me", "Generally speaking, it is good.", sample_chunks)
+    result = await check_hallucination("Tell me", "Generally speaking, it is good.", sample_chunks)
     assert any("generally speaking" in reason.lower() for reason in result.reasons)
 
-def test_use_llm_judge_false_runs_without_groq(sample_chunks):
+@pytest.mark.asyncio
+async def test_use_llm_judge_false_runs_without_groq(sample_chunks):
     # Pass use_llm_judge=False so it doesn't call Groq. If it does, Groq without mock will fail.
-    result = check_hallucination("What is Python?", "Python is a programming language.", sample_chunks, use_llm_judge=False)
+    result = await check_hallucination("What is Python?", "Python is a programming language.", sample_chunks, use_llm_judge=False)
     assert result.grounded is True

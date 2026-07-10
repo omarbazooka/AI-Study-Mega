@@ -11,8 +11,6 @@ Runs 3 layers together (never relies on just one):
 import json
 import re
 
-from groq import Groq
-
 from app.ai_system.validation import rules
 from app.ai_system.validation.exceptions import LLMJudgeError
 from app.ai_system.validation.prompts import build_grounding_judge_prompt
@@ -140,35 +138,22 @@ def _similarity_check(
 
 
 # ============================================================
-# Layer 3: LLM-as-a-Judge (Groq)
+# Layer 3: LLM-as-a-Judge
 # ============================================================
 
-_GROQ_CLIENT: Groq | None = None
-
-
-def _get_groq_client() -> Groq:
-    """Lazily creates a single shared Groq client using the module's own API key."""
-    global _GROQ_CLIENT
-    if _GROQ_CLIENT is None:
-        from app.core.config import settings  # local import to avoid circular imports
-
-        api_key = settings.GROQ_API_KEY_VALIDATION
-        if not api_key:
-            raise LLMJudgeError("GROQ_API_KEY_VALIDATION is not set in the environment")
-        _GROQ_CLIENT = Groq(api_key=api_key)
-    return _GROQ_CLIENT
-
-
-def _llm_judge_check(
+async def _llm_judge_check(
     user_question: str,
     retrieved_chunks: list[RetrievedChunk],
     draft_answer: str,
-    model: str = "llama-3.3-70b-versatile",
+    model: str = None,
 ) -> dict:
     """
-    Calls Groq with the grounding judge prompt and parses the JSON response.
+    Calls the centralized GenerationService with the grounding judge prompt and parses the JSON response.
     Raises LLMJudgeError if the call fails or the response isn't valid JSON.
     """
+    from app.ai_system.services.llm.generation_service import GenerationService
+    from app.ai_system.services.llm.model_router import ModelRouter
+
     context_text = "\n\n".join(
         f"[chunk_id={chunk.chunk_id}] {chunk.text}" for chunk in retrieved_chunks
     )
@@ -179,16 +164,22 @@ def _llm_judge_check(
     )
 
     try:
-        client = _get_groq_client()
-        response = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.0,
-            max_tokens=800,
+        routed_config = ModelRouter.route_task("verifier")
+        model_name = model or routed_config.model_name
+        key_group = routed_config.key_group
+
+        service = GenerationService()
+        response_data = await service._execute_with_failover(
+            task_type="verifier",
+            model_name=model_name,
+            key_group=key_group,
+            prompt=prompt,
+            json_mode=True,
+            temperature=0.0
         )
-        raw_content = response.choices[0].message.content.strip()
-    except Exception as exc:  # network errors, auth errors, rate limits, etc.
-        raise LLMJudgeError(f"Groq API call failed: {exc}") from exc
+        raw_content = response_data.get("text", "").strip()
+    except Exception as exc:  # network errors, key pool exhausted, provider exceptions, etc.
+        raise LLMJudgeError(f"LLM judge validation failed: {exc}") from exc
 
     cleaned = re.sub(r"^```(?:json)?|```$", "", raw_content.strip(), flags=re.MULTILINE).strip()
 
@@ -202,7 +193,7 @@ def _llm_judge_check(
 # Main entry point
 # ============================================================
 
-def check_hallucination(
+async def check_hallucination(
     user_question: str,
     draft_answer: str,
     retrieved_chunks: list[RetrievedChunk],
@@ -233,7 +224,7 @@ def check_hallucination(
     llm_judge_result: dict | None = None
     if use_llm_judge and retrieved_chunks:
         try:
-            llm_judge_result = _llm_judge_check(user_question, retrieved_chunks, draft_answer)
+            llm_judge_result = await _llm_judge_check(user_question, retrieved_chunks, draft_answer)
         except LLMJudgeError as exc:
             reasons.append(f"LLM judge unavailable, falling back to rules+similarity: {exc}")
 

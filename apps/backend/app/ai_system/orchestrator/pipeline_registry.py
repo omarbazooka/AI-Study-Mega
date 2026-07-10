@@ -51,42 +51,48 @@ STOPWORDS = {"a", "an", "the", "about", "on", "in", "of", "to", "for", "and", "o
 def build_citations(retrieved_chunks: List[Any], llm_output: str, source_chunk_ids: Optional[List[str]] = None) -> List[Citation]:
     """
     Constructs citations referencing only the retrieved chunks that are actually
-    relevant or cited in the LLM response text (e.g. by matching content keywords or chunk IDs).
+    relevant or cited in the LLM response text, using the validation package's citation builder.
     """
-    citations = []
-    import re
+    from app.ai_system.validation.citation_builder import build_citations as val_build_citations
+    from app.ai_system.validation.schemas import RetrievedChunk as ValRetrievedChunk
+    from app.schemas.ai_schema import Citation
     
     if not retrieved_chunks or not llm_output:
         return []
         
-    output_lower = llm_output.lower()
-    
+    val_chunks = []
     for c in retrieved_chunks:
         c_id = c.chunk_id if hasattr(c, "chunk_id") else c.get("id") or c.get("chunk_id")
         text = c.text if hasattr(c, "text") else c.get("content", "")
         page = c.page_number if hasattr(c, "page_number") else c.get("page_start", 1)
         section = c.section_title if hasattr(c, "section_title") else c.get("section_title")
         score = c.score if hasattr(c, "score") else c.get("score", 0.90)
+        
+        val_chunks.append(ValRetrievedChunk(
+            chunk_id=str(c_id),
+            text=text,
+            page_number=page,
+            section_title=section,
+            similarity_score=score
+        ))
 
-        chunk_cited = False
-        if source_chunk_ids and str(c_id) in source_chunk_ids:
-            chunk_cited = True
-        elif str(c_id).lower() in output_lower:
-            chunk_cited = True
-        else:
-            words = [w for w in re.findall(r"\w{5,}", text.lower()) if w not in STOPWORDS]
-            matches = sum(1 for w in words if w in output_lower)
-            if matches >= 2:
-                chunk_cited = True
+    if source_chunk_ids:
+        source_chunk_ids_set = {str(sid) for sid in source_chunk_ids}
+        filtered_val_chunks = [vc for vc in val_chunks if vc.chunk_id in source_chunk_ids_set]
+        if filtered_val_chunks:
+            val_chunks = filtered_val_chunks
 
-        if chunk_cited:
-            citations.append(Citation(
-                chunk_id=str(c_id),
-                page_number=page or 1,
-                section_title=section or "RAG Pipeline",
-                score=score or 0.9
-            ))
-            
+    build_result = val_build_citations(llm_output, val_chunks)
+    
+    citations = []
+    for cit in build_result.citations:
+        citations.append(Citation(
+            chunk_id=cit.chunk_id,
+            page_number=cit.page_number or 1,
+            section_title=cit.section_title or "RAG Pipeline",
+            score=cit.relevance_score or 0.9
+        ))
+        
     return citations
 
 
@@ -293,6 +299,7 @@ async def execute_common_pipeline_steps(
         verification_passed = False
         verification_trace = {}
         citations = []
+        verification = None
         
         for attempt in range(policy.max_retries + 1):
             if attempt > 0:
@@ -368,6 +375,7 @@ async def execute_common_pipeline_steps(
                     verification_passed = True
                     break
             except Exception as e:
+                logger.error(f"PIPELINE RUNTIME EXCEPTION: {e}", exc_info=True)
                 verification_trace = {"status": "error", "error": str(e), "retries": attempt}
 
         if not verification_passed:
@@ -499,13 +507,14 @@ async def execute_common_pipeline_steps(
             })
         metadata["generated_questions"] = result_questions
 
+    task_confidence = verification.confidence if (pre_generated_content is None and 'verification' in locals() and verification is not None) else MOCK_CONFIDENCE
     return TaskResult(
         task_id=task.task_id,
         type=task_type,
         status="success" if content_result != NO_ANSWER_FALLBACK else "no_answer",
         content=content_result,
         citations=citations,
-        confidence=MOCK_CONFIDENCE,
+        confidence=task_confidence,
         metadata=metadata
     )
 

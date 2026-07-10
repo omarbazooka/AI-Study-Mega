@@ -20,7 +20,7 @@ from app.ai_system.validation.schemas import (
 )
 
 
-def verify_response(
+async def verify_response(
     user_query: str,
     task_type: TaskType,
     retrieved_chunks: list[RetrievedChunk],
@@ -73,7 +73,7 @@ def verify_response(
         )
 
     # --- Step 1: Hallucination / grounding check ---
-    hallucination_result = check_hallucination(
+    hallucination_result = await check_hallucination(
         user_question=user_query,
         draft_answer=executor_output,
         retrieved_chunks=retrieved_chunks,
@@ -128,6 +128,8 @@ def verify_response(
         hallucination_action=hallucination_result.suggested_action,
         executor_output=executor_output,
     )
+
+    metadata["factors"] = confidence_result.factors
 
     return VerificationResult(
         passed=passed,

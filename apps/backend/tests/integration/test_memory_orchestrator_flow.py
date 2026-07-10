@@ -5,6 +5,8 @@ from app.ai_system.retrieval.schemas import RetrievalResult, RetrievalStatus, Re
 
 client = TestClient(app)
 
+@patch("app.ai_system.orchestrator.document_guard.get_chunks_by_document", new_callable=AsyncMock)
+@patch("app.ai_system.validation.verifier.verify_response", new_callable=AsyncMock)
 @patch("app.db.repositories.document_repository.get_by_id")
 @patch("app.ai_system.orchestrator.pipeline_registry.document_retriever.retrieve", new_callable=AsyncMock)
 @patch("app.db.repositories.chat_repository.save_message")
@@ -12,7 +14,7 @@ client = TestClient(app)
 @patch("app.ai_system.memory.summarizer.Summarizer.summarize_session")
 @patch("app.ai_system.orchestrator.pipeline_registry.llm_generate")
 def test_orchestrator_flow_success_with_memory_and_traceability(
-    mock_llm_gen, mock_summarize, mock_retriever, mock_save, mock_retrieve, mock_doc
+    mock_llm_gen, mock_summarize, mock_retriever, mock_save, mock_retrieve, mock_doc, mock_verify, mock_chunks
 ):
     """
     Test standard multi-turn integration flow:
@@ -22,6 +24,19 @@ def test_orchestrator_flow_success_with_memory_and_traceability(
     """
     from app.ai_system.memory.memory_types import MemoryContext
     from app.ai_system.services.llm.schemas import LLMResponsePayload, LLMUsageMetrics
+    from app.ai_system.validation.schemas import VerificationResult as ValVerificationResult, VerifierAction
+
+    mock_chunks.return_value = [{"chunk_id": "chunk-1", "embedding": [0.1] * 1536}]
+    mock_verify.return_value = ValVerificationResult(
+        passed=True,
+        action=VerifierAction.RETURN,
+        confidence=0.9,
+        reasons=[],
+        unsupported_claims=[],
+        citations=[],
+        final_answer="Biology and cells explanation.",
+        metadata={}
+    )
 
     mock_doc.return_value = {
         "id": "doc-ok-123",

@@ -111,10 +111,9 @@ class RealExecutorClient(ExecutorClient):
         output_format: OutputFormat,
         **kwargs: Any
     ) -> str:
-        import os
-        from app.ai_system.services.llm.config import LLMConfig
-        if os.getenv("PYTEST_CURRENT_TEST") or not LLMConfig.GROQ_FAST_API_KEYS or any("dummy" in k for k in LLMConfig.GROQ_FAST_API_KEYS):
-            logger.info("Pytest test run or no keys. Falling back to MockExecutorClient.")
+        f_keys = LLMConfig.fast_keys()
+        if not f_keys or any("dummy" in k for k in f_keys):
+            logger.info("No keys or dummy keys. Falling back to MockExecutorClient.")
             mock_client = MockExecutorClient()
             return await mock_client.generate_response(prompt, model_tier, output_format, **kwargs)
 

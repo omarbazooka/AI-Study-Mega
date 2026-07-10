@@ -12,8 +12,33 @@ def mock_db_and_memory():
          patch("app.db.repositories.chat_repository.save_message", new_callable=AsyncMock) as mock_save, \
          patch("app.ai_system.orchestrator.pipeline_registry.memory_retriever.get_memory_context", new_callable=AsyncMock) as mock_ctx, \
          patch("app.ai_system.orchestrator.pipeline_registry.store.save_message", new_callable=AsyncMock) as mock_store_save, \
-          patch("app.ai_system.orchestrator.pipeline_registry.summarizer.summarize_session", new_callable=AsyncMock) as mock_sum, \
-          patch("app.ai_system.orchestrator.pipeline_registry.llm_generate", new_callable=AsyncMock) as mock_llm_gen:
+         patch("app.ai_system.orchestrator.pipeline_registry.summarizer.summarize_session", new_callable=AsyncMock) as mock_sum, \
+         patch("app.ai_system.orchestrator.pipeline_registry.llm_generate", new_callable=AsyncMock) as mock_llm_gen, \
+         patch("app.db.repositories.document_repository.get_by_id", new_callable=AsyncMock) as mock_doc_get, \
+         patch("app.ai_system.orchestrator.document_guard.get_chunks_by_document", new_callable=AsyncMock) as mock_chunks_get, \
+         patch("app.ai_system.validation.verifier.verify_response", new_callable=AsyncMock) as mock_verify:
+        
+        mock_doc_get.return_value = {
+            "id": "doc-ready-123",
+            "user_id": "00000000-0000-0000-0000-000000000000",
+            "upload_status": "ready",
+            "chunk_count": 5
+        }
+        mock_chunks_get.return_value = [{"chunk_id": "chunk-abc", "embedding": [0.1] * 1536}]
+        
+        async def mock_verify_side_effect(user_query, task_type, retrieved_chunks, executor_output, **kwargs):
+            from app.ai_system.validation.schemas import VerificationResult as ValVerificationResult, VerifierAction
+            return ValVerificationResult(
+                passed=True,
+                action=VerifierAction.RETURN,
+                confidence=0.9,
+                reasons=[],
+                unsupported_claims=[],
+                citations=[],
+                final_answer=executor_output,
+                metadata={}
+            )
+        mock_verify.side_effect = mock_verify_side_effect
         
         mock_retrieve.return_value = RetrievalResult(
             status=RetrievalStatus.FOUND,

@@ -43,26 +43,15 @@ async def validate_document_access(document_id: str, user_id: str) -> Dict[str, 
     if chunk_count <= 0:
         raise DocumentNotReadyError("DOCUMENT_NOT_READY")
 
-    import os
-    import logging
-    logger = logging.getLogger(__name__)
-    is_pytest = os.getenv("PYTEST_CURRENT_TEST") is not None
-    is_grounding_test = "photo" in str(document_id)
-    
-    if not is_pytest or is_grounding_test:
-        try:
-            chunks = await get_chunks_by_document(document_id)
-        except Exception as e:
-            if is_pytest:
-                logger.info(f"Database connection failed in pytest, using fallback dummy chunks: {e}")
-                chunks = [{"chunk_id": "c1", "embedding": [0.1] * 1536}]
-            else:
-                raise DocumentNotReadyError("DOCUMENT_NOT_READY")
-                
-        if not chunks:
-            raise DocumentNotReadyError("DOCUMENT_NOT_READY")
+    try:
+        chunks = await get_chunks_by_document(document_id)
+    except Exception:
+        raise DocumentNotReadyError("DOCUMENT_NOT_READY")
+        
+    if not chunks:
+        raise DocumentNotReadyError("DOCUMENT_NOT_READY")
 
-        if not any(c.get("embedding") is not None for c in chunks):
-            raise DocumentNotReadyError("DOCUMENT_NOT_READY")
+    if not any(c.get("embedding") is not None for c in chunks):
+        raise DocumentNotReadyError("DOCUMENT_NOT_READY")
 
     return doc

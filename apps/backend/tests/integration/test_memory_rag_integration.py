@@ -21,6 +21,7 @@ def _mock_memory_context(**overrides):
     return MemoryContext(**base)
 
 
+@patch("app.ai_system.orchestrator.document_guard.get_chunks_by_document", new_callable=AsyncMock)
 @patch("app.ai_system.orchestrator.pipeline_registry.document_retriever.retrieve", new_callable=AsyncMock)
 @patch("app.ai_system.orchestrator.pipeline_registry.memory_retriever.get_memory_context", new_callable=AsyncMock)
 @patch("app.db.repositories.chat_repository.save_message", new_callable=AsyncMock)
@@ -28,7 +29,7 @@ def _mock_memory_context(**overrides):
 @patch("app.ai_system.orchestrator.pipeline_registry.summarizer.summarize_session", new_callable=AsyncMock)
 @patch("app.db.repositories.document_repository.get_by_id")
 def test_memory_contains_context_but_rag_returns_zero_chunks(
-    mock_doc, mock_summarize, mock_store_save, mock_chat_save, mock_ctx, mock_retrieve
+    mock_doc, mock_summarize, mock_store_save, mock_chat_save, mock_ctx, mock_retrieve, mock_chunks
 ):
     """
     Critical Integration Test:
@@ -36,6 +37,7 @@ def test_memory_contains_context_but_rag_returns_zero_chunks(
     the response must fall back to the grounding fallback text:
     "لم أجد إجابة واضحة في الملف المرفوع."
     """
+    mock_chunks.return_value = [{"chunk_id": "c1", "embedding": [0.1] * 1536}]
     mock_doc.return_value = {
         "id": "doc-empty-rag",
         "user_id": "00000000-0000-0000-0000-000000000000",
@@ -65,6 +67,8 @@ def test_memory_contains_context_but_rag_returns_zero_chunks(
     assert data["status"] == "no_answer"
     assert data["message"] == "لم أجد إجابة واضحة في الملف المرفوع."
 
+@patch("app.ai_system.orchestrator.document_guard.get_chunks_by_document", new_callable=AsyncMock)
+@patch("app.ai_system.validation.verifier.verify_response", new_callable=AsyncMock)
 @patch("app.ai_system.orchestrator.pipeline_registry.document_retriever.retrieve", new_callable=AsyncMock)
 @patch("app.ai_system.orchestrator.pipeline_registry.memory_retriever.get_memory_context", new_callable=AsyncMock)
 @patch("app.db.repositories.chat_repository.save_message", new_callable=AsyncMock)
@@ -73,7 +77,7 @@ def test_memory_contains_context_but_rag_returns_zero_chunks(
 @patch("app.ai_system.orchestrator.pipeline_registry.llm_generate", new_callable=AsyncMock)
 @patch("app.db.repositories.document_repository.get_by_id")
 def test_memory_and_retrieval_combine_on_success(
-    mock_doc, mock_llm_gen, mock_summarize, mock_store_save, mock_chat_save, mock_ctx, mock_retrieve
+    mock_doc, mock_llm_gen, mock_summarize, mock_store_save, mock_chat_save, mock_ctx, mock_retrieve, mock_verify, mock_chunks
 ):
     """
     Positive-path integration test: when the retriever finds grounded chunks AND memory
@@ -82,6 +86,20 @@ def test_memory_and_retrieval_combine_on_success(
     than operating independently.
     """
     from app.ai_system.services.llm.schemas import LLMResponsePayload, LLMUsageMetrics
+    from app.ai_system.validation.schemas import VerificationResult as ValVerificationResult, VerifierAction
+
+    mock_chunks.return_value = [{"chunk_id": "chunk-1", "embedding": [0.1] * 1536}]
+    mock_verify.return_value = ValVerificationResult(
+        passed=True,
+        action=VerifierAction.RETURN,
+        confidence=0.9,
+        reasons=[],
+        unsupported_claims=[],
+        citations=[],
+        final_answer="Photosynthesis converts light energy into chemical energy.",
+        metadata={}
+    )
+
     mock_llm_gen.return_value = LLMResponsePayload(
         task_id="t-1",
         status="success",

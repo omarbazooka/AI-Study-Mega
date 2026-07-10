@@ -28,29 +28,44 @@ def _normalize_text(text: str) -> str:
     return normalized
 
 
-def _check_document_permissions(document_id: str, user_id: str) -> bool:
+async def _check_document_permissions(document_id: str, user_id: str) -> bool:
     """
-    MOCK — still waiting on the real DB/permissions contract from the backend team.
-    Always returns True for now. Replace with a real call to
-    db/repositories/document_repository.py once that contract is ready.
+    Checks document ownership using the real document_repository.
     """
-    # TODO: replace with real check from db/repositories/document_repository.py
-    return True
+    from app.db.repositories import document_repository
+    try:
+        doc = await document_repository.get_by_id(document_id)
+        if not doc:
+            return False
+        return str(doc.get("user_id")) == str(user_id)
+    except Exception:
+        return False
 
 
-def _check_document_ready(document_id: str) -> bool:
+async def _check_document_ready(document_id: str) -> bool:
     """
-    MOCK — still waiting on the real document status (status == 'READY') from the DB.
+    Checks document upload/ingestion status and chunk availability using document_repository.
     """
-    # TODO: replace with real call to document_repository.get_status(document_id)
-    return True
+    from app.db.repositories import document_repository
+    try:
+        doc = await document_repository.get_by_id(document_id)
+        if not doc:
+            return False
+        if doc.get("upload_status") != "ready":
+            return False
+        chunk_count = doc.get("chunk_count") or 0
+        if chunk_count <= 0:
+            return False
+        return True
+    except Exception:
+        return False
 
 
 # ============================================================
 # Main entry point
 # ============================================================
 
-def validate_input(
+async def validate_input(
     raw_text: str,
     document_id: str | None,
     user_id: str = "",
@@ -118,8 +133,8 @@ def validate_input(
             action=InputAction.REJECT,
         )
 
-    # 6. Ensure the document is READY — mocked for now
-    if not _check_document_ready(document_id):
+    # 6. Ensure the document is READY
+    if not await _check_document_ready(document_id):
         return InputValidationResult(
             valid=False,
             sanitized_input=sanitized,
@@ -128,8 +143,8 @@ def validate_input(
             action=InputAction.REJECT,
         )
 
-    # 7. Ensure the user has permission to access this document — mocked for now
-    if not _check_document_permissions(document_id, user_id):
+    # 7. Ensure the user has permission to access this document
+    if not await _check_document_permissions(document_id, user_id):
         return InputValidationResult(
             valid=False,
             sanitized_input=sanitized,

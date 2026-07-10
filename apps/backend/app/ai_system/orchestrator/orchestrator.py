@@ -354,13 +354,19 @@ class TaskOrchestrator:
         else:
             merged_message = NO_ANSWER_FALLBACK
 
+        # Calculate dynamic merged confidence score from successful tasks
+        if successful_tasks:
+            merged_confidence = sum(t.confidence for t in successful_tasks) / len(successful_tasks)
+        else:
+            merged_confidence = 0.9
+
         return AIResponse(
             status=response_status,
             message=message,
             execution_mode=plan.execution_mode,
             tasks=results_list,
             citations=deduped_citations,
-            confidence=0.9,
+            confidence=merged_confidence,
             metadata={"mock": False},
             pipeline_trace=trace
         )
