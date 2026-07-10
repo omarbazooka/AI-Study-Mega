@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import AsyncIterator, Optional, Dict, Any
+from typing import AsyncIterator, Optional, Dict, Any, Type
+from pydantic import BaseModel
 
 class BaseLLMProvider(ABC):
     """Abstract Base Class for LLM Providers to support provider-agnostic routing."""
@@ -18,6 +19,23 @@ class BaseLLMProvider(ABC):
     ) -> Dict[str, Any]:
         """
         Executes a single text generation request.
+        """
+        pass
+
+    @abstractmethod
+    async def generate_structured(
+        self,
+        model: str,
+        prompt: str,
+        response_model: Type[BaseModel],
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.1,
+        max_tokens: Optional[int] = None,
+        api_key: Optional[str] = None,
+        **kwargs: Any
+    ) -> BaseModel:
+        """
+        Executes text generation and parses/validates output against a Pydantic schema.
         """
         pass
 

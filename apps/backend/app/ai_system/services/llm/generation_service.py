@@ -74,7 +74,8 @@ class GenerationService:
                     system_prompt=system_prompt,
                     temperature=temperature,
                     json_mode=json_mode,
-                    api_key=key.value
+                    api_key=key.value,
+                    profile=key_group.lower()
                 )
                 
                 # Report successful call to clear any cooldowns
@@ -182,10 +183,13 @@ class GenerationService:
             schema_model = AnswerEvaluationSchema
         else:
             # Standard chat_answer, chat_simple, comparison_table, key_points, answer_table, etc.
+            history = (payload.memory_context.recent_context_summary or "") if payload.memory_context else ""
             prompt = PromptBuilder.build_chat_prompt(
                 context=context_str,
-                question=payload.task_query or payload.original_user_query
+                question=payload.task_query or payload.original_user_query,
+                history=history
             )
+
 
         # 4. Generate LLM Output
         try:

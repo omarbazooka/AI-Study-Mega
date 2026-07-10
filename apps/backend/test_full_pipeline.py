@@ -60,7 +60,7 @@ async def main():
         await validate_document_access(DOCUMENT_ID, USER_ID)
         request2.document_id = DOCUMENT_ID
         planner = TaskPlanner()
-        plan = planner.plan(request2)
+        plan = await planner.plan(request2)
         print(f"Plan tasks: {[t.type.value for t in plan.tasks]}")
         print(f"retrieval_required: {[t.retrieval_required for t in plan.tasks]}")
 

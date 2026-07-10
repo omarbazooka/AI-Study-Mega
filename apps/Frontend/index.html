@@ -28,6 +28,13 @@
                 <button id="upload-btn" disabled>Upload PDF</button>
             </section>
 
+            <!-- Authentication Zone -->
+            <section class="auth-section">
+                <h3>Authentication Token</h3>
+                <input type="password" id="auth-token" placeholder="Paste Supabase JWT Auth Token..." style="width: 100%; background: #181818; border: 1px solid #333; color: #fff; padding: 8px; border-radius: 4px; font-size: 0.85rem;">
+                <p class="subtitle" style="margin-top: 3px; font-size: 0.75rem; color: #666;">Token is securely stored in localStorage.</p>
+            </section>
+
             <!-- Status Zone -->
             <section class="status-section">
                 <h3>Document Status</h3>
@@ -46,8 +53,49 @@
             <!-- Extra Tools (Disabled until Ready) -->
             <section class="tools-section">
                 <h3>Document Tools</h3>
+                
+                <!-- Summary Settings -->
+                <div class="control-group">
+                    <label for="summary-size" style="font-size: 0.8rem; color: #aaa; font-weight: bold;">Summary Size:</label>
+                    <select id="summary-size" style="width: 100%; background: #181818; border: 1px solid #333; color: #fff; padding: 6px; border-radius: 4px; margin-top: 3px; cursor: pointer;">
+                        <option value="concise">Concise (~200 words)</option>
+                        <option value="medium" selected>Medium (~500 words)</option>
+                        <option value="detailed">Detailed (~1200 words)</option>
+                        <option value="custom">Custom (Target count...)</option>
+                    </select>
+                    <input type="number" id="custom-word-count" placeholder="Enter target word count..." style="display: none; width: 100%; background: #181818; border: 1px solid #333; color: #fff; padding: 6px; border-radius: 4px; margin-top: 5px;">
+                </div>
+
+                <!-- Quiz Settings -->
+                <div class="control-group" style="margin-top: 5px;">
+                    <label for="quiz-difficulty" style="font-size: 0.8rem; color: #aaa; font-weight: bold;">Quiz Difficulty:</label>
+                    <select id="quiz-difficulty" style="width: 100%; background: #181818; border: 1px solid #333; color: #fff; padding: 6px; border-radius: 4px; margin-top: 3px; cursor: pointer;">
+                        <option value="easy">Easy</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="hard">Hard</option>
+                    </select>
+                </div>
+                <div class="control-group" style="margin-top: 5px; margin-bottom: 10px;">
+                    <label for="quiz-questions-count" style="font-size: 0.8rem; color: #aaa; font-weight: bold;">Questions Count:</label>
+                    <select id="quiz-questions-count" style="width: 100%; background: #181818; border: 1px solid #333; color: #fff; padding: 6px; border-radius: 4px; margin-top: 3px; cursor: pointer;">
+                        <option value="3">3 Questions</option>
+                        <option value="5" selected>5 Questions</option>
+                        <option value="10">10 Questions</option>
+                    </select>
+                </div>
+
                 <button id="summary-btn" class="tool-btn" disabled>Summarize PDF</button>
                 <button id="quiz-btn" class="tool-btn" disabled>Generate Quiz</button>
+            </section>
+
+            <!-- Progressive Progress Stream -->
+            <section class="progress-section" id="progress-panel" style="display: none; background: #181818; border: 1px solid #333; padding: 12px; border-radius: 6px;">
+                <h4 style="font-size: 0.85rem; text-transform: uppercase; color: #aaa; margin-bottom: 8px;">Processing Progress</h4>
+                <div class="progress-bar-container" style="width: 100%; background: #333; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 5px;">
+                    <div class="progress-bar" id="progress-bar" style="width: 0%; height: 100%; background: #6200ee; transition: width 0.2s;"></div>
+                </div>
+                <p id="progress-message" style="font-size: 0.8rem; color: #ccc; margin-bottom: 5px;">Initializing...</p>
+                <ul id="progress-stages" style="list-style: none; font-size: 0.75rem; color: #888; padding-left: 0; max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;"></ul>
             </section>
         </aside>
 

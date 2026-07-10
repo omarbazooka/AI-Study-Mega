@@ -67,7 +67,7 @@ async def test_generation_service_successful_chat():
         )
     )
 
-    api_key_pool._keys["FAST"] = [APIKey("gsk_test", "FAST_KEY_1")]
+    api_key_pool._keys["FAST"] = [APIKey("gsk_test", "FAST_KEY_1", pool=api_key_pool)]
 
     mock_provider = MagicMock()
     mock_provider.generate = AsyncMock(return_value={
@@ -108,7 +108,7 @@ async def test_generation_service_json_repair_retry():
         )
     )
 
-    api_key_pool._keys["REASONING"] = [APIKey("gsk_test_reasoning", "REASONING_KEY_1")]
+    api_key_pool._keys["REASONING"] = [APIKey("gsk_test_reasoning", "REASONING_KEY_1", pool=api_key_pool)]
 
     # First call returns broken JSON, second call returns correct JSON
     mock_provider = MagicMock()

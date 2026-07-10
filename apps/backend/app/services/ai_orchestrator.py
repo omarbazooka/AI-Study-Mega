@@ -81,7 +81,7 @@ class AIOrchestratorService:
         # 3. Planner
         try:
             request.document_id = document_id
-            plan = self.planner.plan(request)
+            plan = await self.planner.plan(request)
             intent_val = plan.primary_intent.value if plan.primary_intent else "unknown"
             trace_stages.append({
                 "stage": "planner",

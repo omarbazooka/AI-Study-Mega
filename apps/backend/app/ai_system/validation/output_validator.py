@@ -103,13 +103,13 @@ def _validate_quiz(quiz_data: dict) -> list[str]:
         elif len(options) != len(set(options)):
             format_errors.append(f"{prefix}: options contain duplicates")
 
-        if correct_answer is None:
-            format_errors.append(f"{prefix}: missing correct_answer")
-        elif isinstance(options, list) and correct_answer not in options:
-            format_errors.append(f"{prefix}: correct_answer is not present in options")
+        if correct_answer is not None:
+            if isinstance(options, list) and correct_answer not in options:
+                format_errors.append(f"{prefix}: correct_answer is not present in options")
 
-        if not explanation or not str(explanation).strip():
-            format_errors.append(f"{prefix}: missing explanation")
+        # explanation is optional in public student-facing quiz responses
+        if explanation is not None and not str(explanation).strip():
+            format_errors.append(f"{prefix}: empty explanation")
 
     return format_errors
 

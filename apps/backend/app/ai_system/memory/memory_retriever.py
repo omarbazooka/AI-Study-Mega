@@ -66,8 +66,8 @@ class MemoryRetriever:
         user_id: str,
         session_id: str,
         source_id: str,
-        source_type: str,
-        user_query: str,
+        source_type: str = "document",
+        user_query: str = "",
         max_tokens: int = 1200
     ) -> MemoryContext:
         """

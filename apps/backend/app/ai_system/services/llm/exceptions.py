@@ -40,3 +40,34 @@ class ContextMissingException(LLMException):
     """Exception raised when no context is found, triggering the Arabic fallback response."""
     def __init__(self, message: str = "لم أجد إجابة واضحة في الملف المرفوع."):
         super().__init__(message)
+
+
+class LLMConfigurationError(LLMException):
+    """Exception raised when LLM is misconfigured or a model cannot be resolved."""
+    pass
+
+
+class LLMAuthenticationError(LLMException):
+    """Exception raised when API authentication fails."""
+    pass
+
+
+class LLMRateLimitError(LLMException):
+    """Exception raised when provider rate limits are hit (429)."""
+    pass
+
+
+class LLMTimeoutError(LLMException):
+    """Exception raised when request times out."""
+    pass
+
+
+class LLMInvalidOutputError(LLMException):
+    """Exception raised when the LLM output is malformed or invalid."""
+    pass
+
+
+class LLMProviderUnavailableError(LLMException):
+    """Exception raised when the provider is down or unreachable."""
+    pass
+

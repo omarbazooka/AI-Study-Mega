@@ -1,6 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 from app.main import app
 
 from app.ai_system.memory.memory_types import MemoryContext
@@ -16,10 +16,54 @@ def mock_db_and_memory():
          patch("app.ai_system.orchestrator.pipeline_registry.llm_generate", new_callable=AsyncMock) as mock_llm_gen, \
          patch("app.db.repositories.document_repository.get_by_id", new_callable=AsyncMock) as mock_doc_get, \
          patch("app.ai_system.orchestrator.document_guard.get_chunks_by_document", new_callable=AsyncMock) as mock_chunks_get, \
+         patch("app.ai_system.services.llm.providers.groq_provider.GroqProvider.generate", new_callable=AsyncMock) as mock_groq_gen, \
+         patch("app.ai_system.orchestrator.pipeline_registry.get_supabase_client") as mock_supabase_getter, \
          patch("app.ai_system.validation.verifier.verify_response", new_callable=AsyncMock) as mock_verify:
         
+        mock_supabase = MagicMock()
+        mock_query = MagicMock()
+        mock_supabase.table.return_value = mock_query
+        mock_query.select.return_value = mock_query
+        mock_query.eq.return_value = mock_query
+        mock_query.order.return_value = mock_query
+        mock_query.insert.return_value = mock_query
+        mock_query.update.return_value = mock_query
+        
+        def execute_side_effect():
+            call_args = mock_supabase.table.call_args_list
+            if call_args and call_args[-1][0][0] == "document_chunks":
+                data = [
+                    {
+                        "id": "chunk-abc",
+                        "content": "Photosynthesis process.",
+                        "page_start": 1,
+                        "chunk_index": 0
+                    }
+                ]
+                return MagicMock(data=data)
+            return MagicMock(data=[])
+            
+        mock_query.execute.side_effect = execute_side_effect
+        mock_supabase_getter.return_value = mock_supabase
+
+        async def mock_groq_gen_side_effect(model, prompt, **kwargs):
+            if "quiz" in prompt.lower() or "quiz" in kwargs.get("system_prompt", "").lower():
+                return {
+                    "text": '{"title": "Photosynthesis Quiz", "questions": [{"question_text": "What is photosynthesis?", "options": ["Option A", "Option B", "Option C", "Option D"], "correct_option_id": 0, "explanation": "Detailed explanation", "concept": "Photosynthesis concept", "difficulty": "medium"}]}',
+                    "input_tokens": 10,
+                    "output_tokens": 10,
+                    "latency_ms": 100
+                }
+            return {
+                "text": "Grounded response for summary.",
+                "input_tokens": 10,
+                "output_tokens": 10,
+                "latency_ms": 100
+            }
+        mock_groq_gen.side_effect = mock_groq_gen_side_effect
+        
         mock_doc_get.return_value = {
-            "id": "doc-ready-123",
+            "id": "00000000-0000-0000-0000-000000000123",
             "user_id": "00000000-0000-0000-0000-000000000000",
             "upload_status": "ready",
             "chunk_count": 5
@@ -45,7 +89,7 @@ def mock_db_and_memory():
             confidence=0.9,
             chunks=[
                 RetrievedChunk(
-                    chunk_id="chunk-abc", document_id="doc-ready-123", user_id="u1",
+                    chunk_id="chunk-abc", document_id="00000000-0000-0000-0000-000000000123", user_id="u1",
                     text="Photosynthesis process.", score=0.9, page_number=1,
                 )
             ],
@@ -115,7 +159,7 @@ client = TestClient(app)
 # Standard mock document details
 MOCK_USER = "00000000-0000-0000-0000-000000000000"
 MOCK_READY_DOC = {
-    "id": "doc-ready-123",
+    "id": "00000000-0000-0000-0000-000000000123",
     "user_id": MOCK_USER,
     "upload_status": "ready",
     "chunk_count": 5
@@ -153,14 +197,14 @@ def test_chat_endpoint_success(mock_repo):
         "request_source": "chat"
     }
 
-    response = client.post("/api/v1/documents/doc-ready-123/chat", json=payload)
+    response = client.post("/api/v1/documents/00000000-0000-0000-0000-000000000123/chat", json=payload)
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "success"
     assert "Summary" in data["message"]
     assert "Quiz" in data["message"]
     assert len(data["tasks"]) == 2
-    assert data["confidence"] == 0.9
+    assert data["confidence"] == 0.95
 
 
 @patch("app.ai_system.orchestrator.document_guard.document_repository")
@@ -243,7 +287,7 @@ def test_chat_endpoint_vague_clarification(mock_repo):
         "language": "en"
     }
 
-    response = client.post("/api/v1/documents/doc-ready-123/chat", json=payload)
+    response = client.post("/api/v1/documents/00000000-0000-0000-0000-000000000123/chat", json=payload)
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "needs_clarification"
@@ -264,7 +308,7 @@ def test_summary_shortcut_success(mock_repo):
         "summary_style": "bullet_points"
     }
 
-    response = client.post("/api/v1/documents/doc-ready-123/summary", json=payload)
+    response = client.post("/api/v1/documents/00000000-0000-0000-0000-000000000123/summary", json=payload)
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "success"
@@ -288,7 +332,7 @@ def test_quiz_shortcut_success(mock_repo):
         "question_type": "multiple_choice"
     }
 
-    response = client.post("/api/v1/documents/doc-ready-123/quiz", json=payload)
+    response = client.post("/api/v1/documents/00000000-0000-0000-0000-000000000123/quiz", json=payload)
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "success"

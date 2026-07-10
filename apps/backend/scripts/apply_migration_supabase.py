@@ -32,36 +32,44 @@ def main():
     supabase_url = os.environ.get("SUPABASE_URL")
     
     # Deriving properties if DATABASE_URL is not present
-    conn_params = {}
+    conn_params_list = []
     if database_url:
         print("Using connection configuration from: DATABASE_URL")
-        conn_params["dsn"] = database_url
+        conn_params_list.append({"dsn": database_url})
     else:
         print("Building connection parameters from environment...")
-        
-        # Derive Host from SUPABASE_URL
         if not supabase_url:
             print("Error: SUPABASE_URL or DATABASE_URL must be specified in the environment.")
             sys.exit(1)
             
         project_ref = supabase_url.replace("https://", "").replace("http://", "").split(".")[0]
-        host = os.environ.get("SUPABASE_DB_HOST", f"db.{project_ref}.supabase.co")
-        port = os.environ.get("SUPABASE_DB_PORT", "5432")
-        user = os.environ.get("SUPABASE_DB_USER", "postgres")
-        dbname = os.environ.get("SUPABASE_DB_NAME", "postgres")
         
-        if not db_password:
-            print("Error: SUPABASE_DB_PASSWORD is missing in the environment / .env file.")
-            print("Please add 'SUPABASE_DB_PASSWORD=your_password' to backend/.env and retry.")
-            sys.exit(1)
+        # Option 1: Direct host connection on 5432
+        direct_host = os.environ.get("SUPABASE_DB_HOST", f"db.{project_ref}.supabase.co")
+        if db_password:
+            conn_params_list.append({
+                "host": direct_host,
+                "port": 5432,
+                "user": "postgres",
+                "password": db_password,
+                "database": "postgres",
+                "connect_timeout": 3
+            })
             
-        conn_params.update({
-            "host": host,
-            "port": port,
-            "user": user,
-            "password": db_password,
-            "database": dbname
-        })
+        # Option 2: Pooler connections on port 6543 across regions
+        POOLER_REGIONS = [
+            "us-east-1", "us-east-2", "eu-central-1", "eu-west-1", "eu-west-2",
+            "us-west-1", "us-west-2", "ap-southeast-1", "ap-northeast-1", "ap-southeast-2"
+        ]
+        for region in POOLER_REGIONS:
+            conn_params_list.append({
+                "host": f"aws-0-{region}.pooler.supabase.com",
+                "port": 6543,
+                "user": f"postgres.{project_ref}",
+                "password": db_password,
+                "database": "postgres",
+                "connect_timeout": 3
+            })
 
     # Find migration script — accepts optional CLI arg, defaults to 003
     migration_filename = sys.argv[1] if len(sys.argv) > 1 else "003_update_embedding_dimension.sql"
@@ -78,15 +86,21 @@ def main():
         sql_content = f.read()
 
     print("Connecting to Supabase PostgreSQL...")
-    try:
-        conn = psycopg2.connect(**conn_params)
-        # Ensure we run in a transaction block
-        conn.autocommit = False
-        print("Connection established successfully!")
-    except Exception as e:
-        print("Connection failed: [Redacted Connection Error]")
-        # Write technical log message to standard error without printing secrets
-        sys.stderr.write(f"Detailed error: {type(e).__name__}\n")
+    conn = None
+    for conn_params in conn_params_list:
+        try:
+            h = conn_params.get("host", "DATABASE_URL")
+            p = conn_params.get("port", "")
+            print(f"Attempting to connect to {h}:{p}...")
+            conn = psycopg2.connect(**conn_params)
+            conn.autocommit = False
+            print(f"Connection established successfully to {h}!")
+            break
+        except Exception as e:
+            continue
+
+    if not conn:
+        print("Connection failed: All connection methods exhausted.")
         sys.exit(1)
 
     print("Executing database migration inside a secure transaction...")

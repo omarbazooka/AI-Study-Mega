@@ -70,11 +70,17 @@ class RealVerifierClient(VerifierClient):
         from app.ai_system.validation.verifier import verify_response
         from app.ai_system.validation.schemas import RetrievedChunk as ValRetrievedChunk, TaskType as ValTaskType
         
-        # Decide if we can run LLM judge based on keys configuration
+        # Decide if we can run LLM judge based on new 5-key config resolver
         use_llm_judge = True
-        v_keys = LLMConfig.verifier_keys()
-        if not v_keys or any("dummy" in k for k in v_keys):
-            use_llm_judge = False
+        if "PYTEST_CURRENT_TEST" not in os.environ:
+            from app.ai_system.services.llm.model_router import resolve_config_for_role, LLMRole
+            try:
+                api_key, _ = resolve_config_for_role(LLMRole.VERIFIER)
+                if not api_key or "dummy" in api_key.lower():
+                    use_llm_judge = False
+            except Exception as e:
+                logger.warning(f"Could not resolve verifier config: {e}")
+                use_llm_judge = False
             
         # Map retrieved chunks to validation schemas
         val_chunks = []

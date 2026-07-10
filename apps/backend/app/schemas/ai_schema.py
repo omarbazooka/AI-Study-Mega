@@ -70,8 +70,8 @@ class TraceStep(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 class PDFChatRequest(BaseModel):
-    # TODO: user_id is temporary and should later come from authenticated user context
-    user_id: str = Field(..., min_length=1, description="Unique identifier for the user.")
+    # user_id is optional so client-side can omit it; backend overrides/injects it internally
+    user_id: Optional[str] = Field(None, description="Unique identifier for the user.")
     session_id: str = Field(..., min_length=1, description="Session identifier for thread tracking.")
     message: str = Field(..., min_length=1, max_length=1000, description="The user's query or instruction.")
     language: str = Field("ar", description="Language of response. Supported values: 'ar', 'en'.")
@@ -87,8 +87,8 @@ class PDFChatRequest(BaseModel):
         return v
 
 class SummaryRequest(BaseModel):
-    # TODO: user_id is temporary and should later come from authenticated user context
-    user_id: str = Field(..., min_length=1, description="Unique identifier for the user.")
+    # user_id is optional so client-side can omit it; backend overrides/injects it internally
+    user_id: Optional[str] = Field(None, description="Unique identifier for the user.")
     session_id: str = Field(..., min_length=1, description="Session identifier for thread tracking.")
     language: str = Field("ar", description="Language of response. Supported values: 'ar', 'en'.")
     user_level: str = Field("intermediate", description="Target educational level.")
@@ -103,8 +103,8 @@ class SummaryRequest(BaseModel):
         return v
 
 class QuizRequest(BaseModel):
-    # TODO: user_id is temporary and should later come from authenticated user context
-    user_id: str = Field(..., min_length=1, description="Unique identifier for the user.")
+    # user_id is optional so client-side can omit it; backend overrides/injects it internally
+    user_id: Optional[str] = Field(None, description="Unique identifier for the user.")
     session_id: str = Field(..., min_length=1, description="Session identifier for thread tracking.")
     language: str = Field("ar", description="Language of response. Supported values: 'ar', 'en'.")
     user_level: str = Field("intermediate", description="Target educational level.")

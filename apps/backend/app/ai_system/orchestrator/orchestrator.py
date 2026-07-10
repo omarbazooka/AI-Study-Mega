@@ -136,8 +136,11 @@ class TaskOrchestrator:
             # Inject optional parameters from task metadata to request
             if task.metadata:
                 for k, v in task.metadata.items():
-                    if not hasattr(request, k) or getattr(request, k) is None:
-                        setattr(request, k, v)
+                    try:
+                        if not hasattr(request, k) or getattr(request, k) is None:
+                            setattr(request, k, v)
+                    except Exception:
+                        pass
 
             return await pipeline_fn(task, request, previous_results)
         except Exception as e:

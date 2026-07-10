@@ -5,15 +5,7 @@ from app.db.repositories import document_repository
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
-# Placeholder static User ID for authentication context
-MOCK_USER_ID = "00000000-0000-0000-0000-000000000000"
-
-async def get_current_user() -> str:
-    """
-    TODO: Integrate this placeholder with the actual Supabase JWT authentication system
-    to retrieve the authenticated user's ID from tokens.
-    """
-    return MOCK_USER_ID
+from app.core.auth import get_current_user
 
 @router.post("/upload", response_model=UploadResponse, status_code=status.HTTP_202_ACCEPTED)
 async def upload_document(

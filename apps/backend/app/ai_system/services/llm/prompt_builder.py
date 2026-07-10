@@ -9,8 +9,9 @@ class PromptBuilder:
     """Builder class to dynamically build formatted prompt strings for tasks."""
 
     @staticmethod
-    def build_chat_prompt(context: str, question: str) -> str:
-        return CHAT_PROMPT_TEMPLATE.format(context=context, question=question)
+    def build_chat_prompt(context: str, question: str, history: str = "") -> str:
+        return CHAT_PROMPT_TEMPLATE.format(context=context, question=question, history=history or "No prior conversation.")
+
 
     @staticmethod
     def build_summary_map_prompt(chunks: str) -> str:

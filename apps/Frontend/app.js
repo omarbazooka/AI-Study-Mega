@@ -8,7 +8,9 @@ const state = {
     documentName: null,
     status: "idle", // idle, uploading, parsing, chunking, embedding, ready, failed
     sessionId: generateSessionId(),
-    pollIntervalId: null
+    pollIntervalId: null,
+    activeQuiz: null,
+    submittingQuiz: false
 };
 
 // DOM Elements
@@ -24,8 +26,17 @@ const docChunks = document.getElementById("doc-chunks");
 const docDurationContainer = document.getElementById("doc-duration-container");
 const docDuration = document.getElementById("doc-duration");
 const docErrorDisplay = document.getElementById("doc-error-display");
+
 const summaryBtn = document.getElementById("summary-btn");
+const summarySizeSelect = document.getElementById("summary-size");
+const customWordCountInput = document.getElementById("custom-word-count");
+
 const quizBtn = document.getElementById("quiz-btn");
+const quizDifficultySelect = document.getElementById("quiz-difficulty");
+const quizCountSelect = document.getElementById("quiz-questions-count");
+
+const authTokenInput = document.getElementById("auth-token");
+
 const chatHeaderTitle = document.getElementById("chat-header-title");
 const langSelect = document.getElementById("lang-select");
 const messagesArea = document.getElementById("messages-area");
@@ -33,7 +44,27 @@ const chatForm = document.getElementById("chat-form");
 const chatInput = document.getElementById("chat-input");
 const sendBtn = document.getElementById("send-btn");
 
-// Generate a random unique session identifier (RFC 4122 compliant UUID v4)
+const progressPanel = document.getElementById("progress-panel");
+const progressBar = document.getElementById("progress-bar");
+const progressMsg = document.getElementById("progress-message");
+const progressStages = document.getElementById("progress-stages");
+
+// Initialize auth token
+authTokenInput.value = localStorage.getItem("supabase_token") || "";
+authTokenInput.addEventListener("input", () => {
+    localStorage.setItem("supabase_token", authTokenInput.value.trim());
+});
+
+// Summary target size toggle
+summarySizeSelect.addEventListener("change", () => {
+    if (summarySizeSelect.value === "custom") {
+        customWordCountInput.style.display = "block";
+    } else {
+        customWordCountInput.style.display = "none";
+    }
+});
+
+// Generate Session UUID
 function generateSessionId() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
         var r = Math.random() * 16 | 0,
@@ -42,9 +73,21 @@ function generateSessionId() {
     });
 }
 
-// Drag & Drop event listeners
+// Request Headers Helper
+function getHeaders() {
+    const headers = {
+        "Content-Type": "application/json"
+    };
+    const token = (authTokenInput.value || localStorage.getItem("supabase_token") || "").trim();
+    if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+    }
+    return headers;
+}
+
+// Drag & Drop listeners
 uploadBox.addEventListener("click", () => {
-    if (state.status !== "uploading" && state.status !== "parsing" && state.status !== "chunking" && state.status !== "embedding") {
+    if (!["uploading", "parsing", "chunking", "embedding"].includes(state.status)) {
         fileInput.click();
     }
 });
@@ -61,7 +104,7 @@ uploadBox.addEventListener("dragleave", () => {
 uploadBox.addEventListener("drop", (e) => {
     e.preventDefault();
     uploadBox.style.borderColor = "#444";
-    if (state.status === "uploading" || state.status === "parsing" || state.status === "chunking" || state.status === "embedding") {
+    if (["uploading", "parsing", "chunking", "embedding"].includes(state.status)) {
         return;
     }
     if (e.dataTransfer.files.length > 0) {
@@ -87,7 +130,6 @@ function handleFileSelection() {
     }
 }
 
-// Format bytes to readable size
 function formatBytes(bytes) {
     if (bytes === 0) return "0 Bytes";
     const k = 1024;
@@ -96,7 +138,6 @@ function formatBytes(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
-// Trigger Document Upload
 uploadBtn.addEventListener("click", uploadFile);
 
 async function uploadFile() {
@@ -111,11 +152,22 @@ async function uploadFile() {
     const formData = new FormData();
     formData.append("file", file);
 
+    const headers = {};
+    const token = (authTokenInput.value || localStorage.getItem("supabase_token") || "").trim();
+    if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+    }
+
     try {
         const response = await fetch(`${API_BASE_URL}/api/v1/documents/upload`, {
             method: "POST",
+            headers: headers,
             body: formData
         });
+
+        if (response.status === 401) {
+            throw new Error("Authentication token is expired or invalid. Please paste a new token.");
+        }
 
         if (!response.ok) {
             const errData = await response.json();
@@ -124,11 +176,7 @@ async function uploadFile() {
 
         const data = await response.json();
         state.documentId = data.document_id;
-        
-        // Show status based on immediate upload response status
         updateUIStatus(data.status);
-        
-        // Start polling the status endpoint
         startStatusPolling(data.document_id);
 
     } catch (error) {
@@ -137,7 +185,6 @@ async function uploadFile() {
     }
 }
 
-// Poll Ingestion Status
 function startStatusPolling(documentId) {
     if (state.pollIntervalId) {
         clearInterval(state.pollIntervalId);
@@ -145,8 +192,14 @@ function startStatusPolling(documentId) {
 
     state.pollIntervalId = setInterval(async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/documents/${documentId}/status`);
+            const response = await fetch(`${API_BASE_URL}/api/v1/documents/${documentId}/status`, {
+                headers: getHeaders()
+            });
             
+            if (response.status === 401) {
+                throw new Error("Authentication token is expired or invalid.");
+            }
+
             if (!response.ok) {
                 const errData = await response.json();
                 throw new Error(errData.detail || "Failed to retrieve status.");
@@ -168,15 +221,11 @@ function startStatusPolling(documentId) {
     }, 2000);
 }
 
-// Update UI depending on Pipeline Status
 function updateUIStatus(newStatus, extraData = {}) {
     state.status = newStatus.toLowerCase();
-    
-    // Update badge class and text
     docStatusDisplay.className = `status-badge status-${state.status}`;
     docStatusDisplay.textContent = state.status.toUpperCase();
 
-    // Show duration if available in extraData
     if (extraData.processing_time_seconds !== undefined && extraData.processing_time_seconds !== null) {
         docDurationContainer.style.display = "block";
         docDuration.textContent = `${extraData.processing_time_seconds}s`;
@@ -185,7 +234,6 @@ function updateUIStatus(newStatus, extraData = {}) {
     }
 
     if (state.status === "ready") {
-        // Unlock controls
         chatInput.disabled = false;
         sendBtn.disabled = false;
         summaryBtn.disabled = false;
@@ -193,16 +241,13 @@ function updateUIStatus(newStatus, extraData = {}) {
         chatInput.placeholder = "Ask a question about the document...";
         chatHeaderTitle.textContent = state.documentName;
         
-        // Display statistics
         docStats.style.display = "block";
         docPages.textContent = extraData.page_count || "N/A";
         docChunks.textContent = extraData.chunk_count || 0;
         
-        // Let the user know the document is ready
         appendSystemMessage("Document is ready! You can now start chatting or generate summaries/quizzes.");
-        uploadBtn.disabled = false; // allow uploading another document
+        uploadBtn.disabled = false;
     } else if (state.status === "failed") {
-        // Lock controls
         chatInput.disabled = true;
         sendBtn.disabled = true;
         summaryBtn.disabled = true;
@@ -214,19 +259,15 @@ function updateUIStatus(newStatus, extraData = {}) {
         appendSystemMessage(`Error: ${errMsg}`);
         uploadBtn.disabled = false;
     } else {
-        // Processing (uploading, parsing, chunking, embedding)
         chatInput.disabled = true;
         sendBtn.disabled = true;
         summaryBtn.disabled = true;
         quizBtn.disabled = true;
         chatInput.placeholder = `Ingestion pipeline status: ${state.status.toUpperCase()}...`;
-        
-        // Hide stats during ingestion
         docStats.style.display = "none";
     }
 }
 
-// Send Message Handler
 chatForm.addEventListener("submit", (e) => {
     e.preventDefault();
     const text = chatInput.value.trim();
@@ -236,10 +277,16 @@ chatForm.addEventListener("submit", (e) => {
     sendMessage(text);
 });
 
+// Chat QA Stream Reader (POST to /chat/stream)
 async function sendMessage(text) {
     appendMessage("user", text);
-    
     const typingIndicator = appendTypingIndicator();
+    
+    // Display progress panel
+    progressPanel.style.display = "block";
+    progressBar.style.width = "0%";
+    progressMsg.textContent = "Initializing stream...";
+    progressStages.innerHTML = "";
 
     try {
         const payload = {
@@ -251,37 +298,77 @@ async function sendMessage(text) {
             request_source: "chat"
         };
 
-        const response = await fetch(`${API_BASE_URL}/api/v1/documents/${state.documentId}/chat`, {
+        const response = await fetch(`${API_BASE_URL}/api/v1/documents/${state.documentId}/chat/stream`, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: getHeaders(),
             body: JSON.stringify(payload)
         });
 
         removeTypingIndicator(typingIndicator);
 
+        if (response.status === 401) {
+            throw new Error("Session or authentication token has expired. Please paste a fresh token.");
+        }
+        if (response.status === 403) {
+            throw new Error("Permission denied. You do not have access to this document.");
+        }
         if (!response.ok) {
-            const errData = await response.json();
-            throw new Error(errData.detail || "Failed to send chat message.");
+            throw new Error("Failed to connect progress stream: " + response.statusText);
         }
 
-        const data = await response.json();
-        // The API returns AIResponse which has a message property containing the answer
-        appendMessage("assistant", data.message, data.citations, data.pipeline_trace);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop();
+
+            for (const line of lines) {
+                if (line.trim()) {
+                    const event = JSON.parse(line);
+                    progressBar.style.width = `${event.progress}%`;
+                    progressMsg.textContent = event.message;
+
+                    const li = document.createElement("li");
+                    li.innerHTML = `<strong>[${event.stage.toUpperCase()}]</strong> ${event.message} (${event.status})`;
+                    progressStages.appendChild(li);
+                    progressStages.scrollTop = progressStages.scrollHeight;
+
+                    if (event.stage === "completed" && event.status === "completed") {
+                        appendMessage("assistant", event.content, event.citations || []);
+                    }
+                    if (event.status === "failed") {
+                        appendMessage("assistant", `System Error: ${event.message}`);
+                        return;
+                    }
+                }
+            }
+        }
 
     } catch (error) {
         removeTypingIndicator(typingIndicator);
         appendMessage("assistant", `System Error: ${error.message}`);
+    } finally {
+        setTimeout(() => {
+            progressPanel.style.display = "none";
+        }, 3000);
     }
 }
 
-// Summarize Tool Handler
+// Map-Reduce Summarize Handler
 summaryBtn.addEventListener("click", async () => {
     if (!state.documentId || state.status !== "ready") return;
     
-    appendSystemMessage("Requesting document summary...");
+    appendSystemMessage("Requesting Map-Reduce summary...");
     const typingIndicator = appendTypingIndicator();
+
+    const summarySize = summarySizeSelect.value;
+    const targetWordCount = summarySize === "custom" ? parseInt(customWordCountInput.value) || 100 : null;
 
     try {
         const payload = {
@@ -289,18 +376,22 @@ summaryBtn.addEventListener("click", async () => {
             session_id: state.sessionId,
             language: langSelect.value,
             user_level: "intermediate",
-            summary_style: "bullet_points"
+            summary_style: "bullet_points",
+            summary_size: summarySize,
+            target_word_count: targetWordCount
         };
 
         const response = await fetch(`${API_BASE_URL}/api/v1/documents/${state.documentId}/summary`, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: getHeaders(),
             body: JSON.stringify(payload)
         });
 
         removeTypingIndicator(typingIndicator);
+
+        if (response.status === 401) {
+            throw new Error("Authentication token is expired or invalid.");
+        }
 
         if (!response.ok) {
             const errData = await response.json();
@@ -316,12 +407,15 @@ summaryBtn.addEventListener("click", async () => {
     }
 });
 
-// Quiz Tool Handler
+// Map-Reduce Quiz Generation Handler
 quizBtn.addEventListener("click", async () => {
     if (!state.documentId || state.status !== "ready") return;
 
-    appendSystemMessage("Requesting quiz generation...");
+    appendSystemMessage("Generating interactive quiz...");
     const typingIndicator = appendTypingIndicator();
+
+    const difficulty = quizDifficultySelect.value;
+    const count = parseInt(quizCountSelect.value) || 5;
 
     try {
         const payload = {
@@ -329,20 +423,22 @@ quizBtn.addEventListener("click", async () => {
             session_id: state.sessionId,
             language: langSelect.value,
             user_level: "intermediate",
-            difficulty: "medium",
-            number_of_questions: 5,
+            difficulty: difficulty,
+            number_of_questions: count,
             question_type: "multiple_choice"
         };
 
         const response = await fetch(`${API_BASE_URL}/api/v1/documents/${state.documentId}/quiz`, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: getHeaders(),
             body: JSON.stringify(payload)
         });
 
         removeTypingIndicator(typingIndicator);
+
+        if (response.status === 401) {
+            throw new Error("Authentication token is expired or invalid.");
+        }
 
         if (!response.ok) {
             const errData = await response.json();
@@ -350,7 +446,8 @@ quizBtn.addEventListener("click", async () => {
         }
 
         const data = await response.json();
-        appendMessage("assistant", data.message, data.citations, data.pipeline_trace);
+        const quizObj = JSON.parse(data.message);
+        renderInteractiveQuiz(quizObj);
 
     } catch (error) {
         removeTypingIndicator(typingIndicator);
@@ -358,9 +455,155 @@ quizBtn.addEventListener("click", async () => {
     }
 });
 
-// Render Message bubble in Chat List
+// Render Interactive Quiz Layout
+function renderInteractiveQuiz(quizData) {
+    state.activeQuiz = quizData;
+    
+    const welcome = messagesArea.querySelector(".welcome-message");
+    if (welcome) {
+        messagesArea.removeChild(welcome);
+    }
+    
+    const quizDiv = document.createElement("div");
+    quizDiv.className = "quiz-card";
+    quizDiv.id = `quiz-${quizData.quiz_id}`;
+    
+    let quizHTML = `<div class="quiz-title">📝 ${quizData.title || "Interactive Quiz"}</div>`;
+    
+    quizData.questions.forEach((q, idx) => {
+        quizHTML += `
+            <div class="quiz-question" id="quiz-q-${q.id}">
+                <div class="quiz-question-text" style="font-weight: bold; margin-bottom: 8px;">${idx + 1}. ${q.question_text}</div>
+                <div class="quiz-options" style="display: flex; flex-direction: column; gap: 6px;">
+        `;
+        q.options.forEach((opt, optIdx) => {
+            quizHTML += `
+                <label class="quiz-option-label" for="opt-${q.id}-${optIdx}">
+                    <input type="radio" name="quiz-ans-${q.id}" id="opt-${q.id}-${optIdx}" value="${optIdx}">
+                    <span style="margin-left: 6px;">${opt}</span>
+                </label>
+            `;
+        });
+        quizHTML += `
+                </div>
+            </div>
+        `;
+    });
+    
+    quizHTML += `
+        <button id="submit-quiz-btn" class="quiz-submit-btn" style="width: 100%; margin-top: 10px;">Submit Answers</button>
+        <p id="quiz-error-text" class="error-text" style="display: none; color: #f44336; margin-top: 5px;"></p>
+    `;
+    
+    quizDiv.innerHTML = quizHTML;
+    messagesArea.appendChild(quizDiv);
+    messagesArea.scrollTop = messagesArea.scrollHeight;
+    
+    // Bind submission listener
+    document.getElementById("submit-quiz-btn").addEventListener("click", () => {
+        submitQuizAnswers(quizData.quiz_id);
+    });
+}
+
+// Grade Quiz Answers Server-Side with Idempotency
+async function submitQuizAnswers(quizId) {
+    if (state.submittingQuiz) return;
+    
+    const submitBtn = document.getElementById("submit-quiz-btn");
+    const errorText = document.getElementById("quiz-error-text");
+    
+    const responses = [];
+    const questions = state.activeQuiz.questions;
+    let allAnswered = true;
+    
+    for (const q of questions) {
+        const selected = document.querySelector(`input[name="quiz-ans-${q.id}"]:checked`);
+        if (!selected) {
+            allAnswered = false;
+            break;
+        }
+        responses.push({
+            question_id: q.id,
+            selected_option_id: parseInt(selected.value)
+        });
+    }
+    
+    if (!allAnswered) {
+        errorText.textContent = "Please answer all questions before submitting.";
+        errorText.style.display = "block";
+        return;
+    }
+    
+    errorText.style.display = "none";
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Grading answers on server...";
+    state.submittingQuiz = true;
+
+    // Unique Idempotency Key
+    const idempotencyKey = `attempt-${state.sessionId}-${quizId}`;
+
+    try {
+        const payload = {
+            attempt_number: 1,
+            idempotency_key: idempotencyKey,
+            responses: responses
+        };
+
+        const response = await fetch(`${API_BASE_URL}/api/v1/documents/quizzes/${quizId}/submit`, {
+            method: "POST",
+            headers: getHeaders(),
+            body: JSON.stringify(payload)
+        });
+
+        if (response.status === 401) {
+            throw new Error("Authentication token has expired. Please paste a new token.");
+        }
+
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.detail || "Submission grading failed.");
+        }
+
+        const graded = await response.json();
+        
+        // Lock options inputs
+        document.querySelectorAll(`input[name^="quiz-ans-"]`).forEach(i => i.disabled = true);
+        
+        // Apply visual reviews (correct/incorrect) and append explanations
+        graded.responses.forEach(r => {
+            const questionDiv = document.getElementById(`quiz-q-${r.question_id}`);
+            
+            r.options.forEach((opt, optIdx) => {
+                const label = document.querySelector(`label[for="opt-${r.question_id}-${optIdx}"]`);
+                if (optIdx === r.correct_option_id) {
+                    label.className = "quiz-option-label correct";
+                } else if (optIdx === r.selected_option_id && !r.is_correct) {
+                    label.className = "quiz-option-label incorrect";
+                }
+            });
+            
+            const explDiv = document.createElement("div");
+            explDiv.className = "quiz-explanation";
+            explDiv.innerHTML = `<strong>Correct Answer:</strong> Option ${r.correct_option_id + 1} | <strong>Explanation:</strong> ${r.explanation}`;
+            questionDiv.appendChild(explDiv);
+        });
+        
+        // Render score
+        submitBtn.textContent = `Grading Completed! Score: ${graded.score_percentage}% (${graded.correct_count}/${graded.total_questions})`;
+        submitBtn.style.backgroundColor = "#4caf50";
+
+    } catch (error) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Submit Answers";
+        errorText.textContent = error.message;
+        errorText.style.display = "block";
+    } finally {
+        state.submittingQuiz = false;
+    }
+}
+
+// Render Messages & Citations
 function appendMessage(role, content, citations = [], pipelineTrace = null) {
-    // Check and remove the welcome screen if present
     const welcome = messagesArea.querySelector(".welcome-message");
     if (welcome) {
         messagesArea.removeChild(welcome);
@@ -369,7 +612,7 @@ function appendMessage(role, content, citations = [], pipelineTrace = null) {
     const messageDiv = document.createElement("div");
     messageDiv.className = `message ${role}`;
     
-    // Check text direction for Arabic rendering (basic regex checking for Arabic characters)
+    // Auto RTL basic regex
     const isArabic = /[\u0600-\u06FF]/.test(content);
     if (isArabic) {
         messageDiv.classList.add("rtl-text");
@@ -377,271 +620,91 @@ function appendMessage(role, content, citations = [], pipelineTrace = null) {
 
     let finalHTML = "";
 
-    // Render pipeline_trace if present
     if (pipelineTrace) {
+        // Pipeline trace metadata rendering logic preserved for tracing detail
         const planner = pipelineTrace.planner || {};
         const orchestrator = pipelineTrace.orchestrator || {};
         const memory = pipelineTrace.memory || {};
         const retrieval = pipelineTrace.retrieval || {};
-
-        const tasksList = (planner.tasks || []).map(t => `<li><strong>المهمة:</strong> ${t.type} | <strong>الاستعلام:</strong> "${t.query}"</li>`).join("");
-        const selectedPipelines = (orchestrator.selected_pipeline_names || []).join(", ") || "none";
-        const launchedTasks = (orchestrator.launched_task_names || []).join(", ") || "none";
-
-        let personalizationText = "Not Applied";
-        if (memory.personalization_applied) {
-            if (memory.retrieved_count === 0) {
-                personalizationText = `Applied from default ${memory.profile_level || 'beginner'} profile`;
-            } else {
-                personalizationText = "Applied from retrieved memories";
-            }
-        }
+        const tasksList = (planner.tasks || []).map(t => `<li><strong>Task:</strong> ${t.type} | <strong>Query:</strong> "${t.query}"</li>`).join("");
 
         finalHTML += `
-            <div class="pipeline-trace-container">
-                <div class="pipeline-trace-header">🔍 تفاصيل مراحل المعالجة (Pipeline Trace)</div>
-                <div class="pipeline-trace-sections">
-                    <div class="trace-section planner-trace">
-                        <h4>📋 المخطط (Planner)</h4>
-                        <ul>
-                            <li><strong>Status:</strong> ${planner.status || "completed"}</li>
-                            <li><strong>Mode:</strong> ${planner.mode || "rule_based"}</li>
-                            <li><strong>LLM Used:</strong> ${planner.llm_used ? "true" : "false"}</li>
-                            <li><strong>Intent:</strong> ${planner.intent || "unknown"}</li>
-                            <li><strong>Execution Mode:</strong> ${planner.execution_mode || "single"}</li>
-                            <li><strong>Confidence:</strong> ${(planner.confidence || 0) * 100}%</li>
-                            ${tasksList ? `<li><strong>Planned Tasks:</strong><ul>${tasksList}</ul></li>` : ""}
-                        </ul>
-                    </div>
-                    <div class="trace-section orchestrator-trace">
-                        <h4>⚙️ المنسق (Orchestrator)</h4>
-                        <ul>
-                            <li><strong>Status:</strong> ${orchestrator.status || "routed_only"}</li>
-                            <li><strong>Selected Execution Mode:</strong> ${orchestrator.selected_execution_mode || "single"}</li>
-                            <li><strong>Selected Pipeline Names:</strong> ${selectedPipelines}</li>
-                            <li><strong>DAG Mode:</strong> ${orchestrator.dag_mode || "not_used"}</li>
-                            <li><strong>Parallel/Sequential Status:</strong> ${orchestrator.parallel_sequential_hybrid_status || "sequential"}</li>
-                            <li><strong>Launched Task Names:</strong> ${launchedTasks}</li>
-                            <li><strong>Retrieval Status:</strong> ${orchestrator.retrieval_status || "not_run"}</li>
-                            <li><strong>Verifier Status:</strong> ${orchestrator.verifier_status || "not_run"}</li>
-                        </ul>
-                    </div>
-                    <div class="trace-section memory-trace">
-                        <h4>🧠 الذاكرة (Memory)</h4>
-                        <ul>
-                            <li><strong>Memory Layer:</strong> ${memory.memory_layer_checked ? "Checked" : "Not Checked"}</li>
-                            <li><strong>Long-term Memories Retrieved:</strong> ${memory.retrieved_count || 0}</li>
-                            <li><strong>Personalization:</strong> ${personalizationText}</li>
-                        </ul>
-                    </div>
-                    <div class="trace-section retrieval-trace">
-                        <h4>🔍 الاسترجاع (Retrieval RAG)</h4>
-                        <ul>
-                            <li><strong>Status:</strong> ${retrieval.status || "not_run"}</li>
-                            <li><strong>Confidence:</strong> ${Math.round((retrieval.confidence || 0) * 100)}%</li>
-                            <li><strong>Chunks Sourced:</strong> ${retrieval.chunks_used || 0}</li>
-                            <li><strong>Latency:</strong> ${retrieval.latency_ms || 0}ms</li>
-                        </ul>
-                    </div>
+            <div class="pipeline-trace-container" style="background: #111; padding: 10px; border-radius: 4px; margin-bottom: 10px; font-size: 0.8rem; border-left: 2px solid #ff9800;">
+                <div class="pipeline-trace-header" style="font-weight: bold; color: #ff9800; margin-bottom: 8px;">🔍 PROCESS TRACE STAGES</div>
+                <div style="display: flex; flex-direction: column; gap: 5px;">
+                    <div><strong>Planner status:</strong> ${planner.status || "completed"} | <strong>Execution mode:</strong> ${planner.execution_mode || "single"}</div>
+                    <div><strong>Orchestrator:</strong> ${orchestrator.selected_execution_mode || "single"} | <strong>Verifier status:</strong> ${orchestrator.verifier_status || "not_run"}</div>
+                    <div><strong>Memory items retrieved:</strong> ${memory.retrieved_count || 0}</div>
+                    <div><strong>Retrieval RAG status:</strong> ${retrieval.status || "not_run"} | <strong>Latency:</strong> ${retrieval.latency_ms || 0}ms</div>
+                    ${tasksList ? `<ul style="margin-left: 15px; margin-top: 5px;">${tasksList}</ul>` : ""}
                 </div>
             </div>
-            <hr class="trace-divider">
+            <hr style="border: none; border-top: 1px dashed #444; margin: 10px 0;">
         `;
     }
 
-    // Format content with custom simple markdown rendering
-    const formattedHTML = formatMarkdown(content);
-    finalHTML += `<div class="final-answer-container">${formattedHTML}</div>`;
-    messageDiv.innerHTML = finalHTML;
+    // Add content body text
+    finalHTML += `<div class="message-text" style="white-space: pre-wrap;">${content}</div>`;
 
-    // Render citations if present
+    // Render citations
     if (citations && citations.length > 0) {
-        const citationsDiv = document.createElement("div");
-        citationsDiv.className = "citations-container";
-        citationsDiv.innerHTML = "<strong>Sources:</strong> ";
-        
-        citations.forEach(cit => {
-            const badge = document.createElement("span");
-            badge.className = "citation-badge";
-            
-            let label = `Page ${cit.page_number}`;
-            if (cit.section_title) {
-                label += `: ${cit.section_title}`;
-            }
-            if (cit.score) {
-                label += ` (conf: ${Math.round(cit.score * 100)}%)`;
-            }
-            badge.textContent = label;
-            citationsDiv.appendChild(badge);
+        let citationHTML = `
+            <div class="citations-container" style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed #444; font-size: 0.8rem; color: #aaa;">
+                <strong>Citations:</strong>
+                <ul style="list-style: none; padding-left: 0; display: flex; flex-direction: column; gap: 4px; margin-top: 4px;">
+        `;
+        citations.forEach((c, idx) => {
+            citationHTML += `
+                <li>[${idx + 1}] Chk: ${c.chunk_id.substring(0, 8)}... | Page: ${c.page_number} | Relevance: ${c.score ? Math.round(c.score * 100) + '%' : 'N/A'}</li>
+            `;
         });
-        messageDiv.appendChild(citationsDiv);
+        citationHTML += `
+                </ul>
+            </div>
+        `;
+        finalHTML += citationHTML;
     }
 
+    messageDiv.innerHTML = finalHTML;
     messagesArea.appendChild(messageDiv);
     messagesArea.scrollTop = messagesArea.scrollHeight;
 }
 
-// Append System Message
 function appendSystemMessage(text) {
-    appendMessage("system", text);
+    const sysDiv = document.createElement("div");
+    sysDiv.className = "system-notification";
+    sysDiv.style.cssText = "text-align: center; color: #777; font-size: 0.8rem; margin: 5px 0;";
+    sysDiv.textContent = `[SYSTEM] ${text}`;
+    messagesArea.appendChild(sysDiv);
+    messagesArea.scrollTop = messagesArea.scrollHeight;
 }
 
-// Loading typing state indicator helpers
 function appendTypingIndicator() {
+    const welcome = messagesArea.querySelector(".welcome-message");
+    if (welcome) {
+        messagesArea.removeChild(welcome);
+    }
+
     const indicator = document.createElement("div");
-    indicator.className = "message assistant";
-    
-    indicator.innerHTML = `
-        <div class="stages-loader">
-            <div class="stage-item" id="stage-planner">
-                <span class="stage-icon loader-circle"></span>
-                <span class="stage-text">تحليل السؤال والتخطيط (Planner)...</span>
-            </div>
-            <div class="stage-item pending" id="stage-retriever">
-                <span class="stage-icon dot"></span>
-                <span class="stage-text">استرجاع قطع المستند (Retriever)...</span>
-            </div>
-            <div class="stage-item pending" id="stage-executor">
-                <span class="stage-icon dot"></span>
-                <span class="stage-text">توليد وصياغة الإجابة (Executor)...</span>
-            </div>
-            <div class="stage-item pending" id="stage-verifier">
-                <span class="stage-icon dot"></span>
-                <span class="stage-text">التحقق وتدقيق الجودة (Verifier)...</span>
-            </div>
-        </div>
-    `;
-    
+    indicator.className = "message assistant typing";
+    indicator.innerHTML = `<span class="typing-dot">.</span><span class="typing-dot">.</span><span class="typing-dot">.</span>`;
     messagesArea.appendChild(indicator);
     messagesArea.scrollTop = messagesArea.scrollHeight;
-
-    // Simulate progress transitions
-    const t1 = setTimeout(() => {
-        const planner = indicator.querySelector("#stage-planner");
-        const retriever = indicator.querySelector("#stage-retriever");
-        if (planner && retriever) {
-            planner.classList.remove("loading");
-            planner.classList.add("done");
-            planner.querySelector(".stage-icon").className = "stage-icon done-check";
-            planner.querySelector(".stage-icon").innerHTML = "✓";
-            
-            retriever.classList.remove("pending");
-            retriever.classList.add("loading");
-            retriever.querySelector(".stage-icon").className = "stage-icon loader-circle";
-        }
-    }, 600);
-
-    const t2 = setTimeout(() => {
-        const retriever = indicator.querySelector("#stage-retriever");
-        const executor = indicator.querySelector("#stage-executor");
-        if (retriever && executor) {
-            retriever.classList.remove("loading");
-            retriever.classList.add("done");
-            retriever.querySelector(".stage-icon").className = "stage-icon done-check";
-            retriever.querySelector(".stage-icon").innerHTML = "✓";
-            
-            executor.classList.remove("pending");
-            executor.classList.add("loading");
-            executor.querySelector(".stage-icon").className = "stage-icon loader-circle";
-        }
-    }, 1200);
-
-    const t3 = setTimeout(() => {
-        const executor = indicator.querySelector("#stage-executor");
-        const verifier = indicator.querySelector("#stage-verifier");
-        if (executor && verifier) {
-            executor.classList.remove("loading");
-            executor.classList.add("done");
-            executor.querySelector(".stage-icon").className = "stage-icon done-check";
-            executor.querySelector(".stage-icon").innerHTML = "✓";
-            
-            verifier.classList.remove("pending");
-            verifier.classList.add("loading");
-            verifier.querySelector(".stage-icon").className = "stage-icon loader-circle";
-        }
-    }, 1800);
-
-    indicator.dataset.timer1 = t1;
-    indicator.dataset.timer2 = t2;
-    indicator.dataset.timer3 = t3;
-
     return indicator;
 }
 
-function removeTypingIndicator(indicatorElement) {
-    if (indicatorElement) {
-        if (indicatorElement.dataset.timer1) clearTimeout(parseInt(indicatorElement.dataset.timer1));
-        if (indicatorElement.dataset.timer2) clearTimeout(parseInt(indicatorElement.dataset.timer2));
-        if (indicatorElement.dataset.timer3) clearTimeout(parseInt(indicatorElement.dataset.timer3));
-        if (indicatorElement.parentNode) {
-            indicatorElement.parentNode.removeChild(indicatorElement);
-        }
+function removeTypingIndicator(indicator) {
+    if (indicator && indicator.parentNode === messagesArea) {
+        messagesArea.removeChild(indicator);
     }
 }
 
-// Simple Markdown to HTML parser
-function formatMarkdown(text) {
-    if (!text) return "";
-    
-    const lines = text.split("\n");
-    let html = "";
-    let inList = false;
-    
-    for (let line of lines) {
-        // Escape HTML tags to prevent injections but preserve formatting
-        let cleanLine = line
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;");
-            
-        // Inline bold (**text**)
-        cleanLine = cleanLine.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
-        // Inline italic (*text*)
-        cleanLine = cleanLine.replace(/\*(.*?)\*/g, "<em>$1</em>");
-        
-        // Horizontal Rule
-        if (cleanLine.trim() === "---") {
-            if (inList) { html += "</ul>"; inList = false; }
-            html += "<hr>";
-        }
-        // Headers
-        else if (cleanLine.startsWith("### ")) {
-            if (inList) { html += "</ul>"; inList = false; }
-            html += `<h3>${cleanLine.substring(4)}</h3>`;
-        } else if (cleanLine.startsWith("## ")) {
-            if (inList) { html += "</ul>"; inList = false; }
-            html += `<h2>${cleanLine.substring(3)}</h2>`;
-        } else if (cleanLine.startsWith("# ")) {
-            if (inList) { html += "</ul>"; inList = false; }
-            html += `<h1>${cleanLine.substring(2)}</h1>`;
-        } 
-        // List items
-        else if (cleanLine.trim().startsWith("- ") || cleanLine.trim().startsWith("* ")) {
-            if (!inList) { html += "<ul>"; inList = true; }
-            const content = cleanLine.trim().substring(2);
-            html += `<li>${content}</li>`;
-        } 
-        // Normal paragraph/empty line
-        else {
-            if (inList) { html += "</ul>"; inList = false; }
-            if (cleanLine.trim() === "") {
-                html += "<br>";
-            } else {
-                html += `<p>${cleanLine}</p>`;
-            }
-        }
-    }
-    if (inList) { html += "</ul>"; }
-    return html;
-}
-
-// Visual error toast wrappers
 function showError(message) {
-    docErrorDisplay.textContent = message;
     docErrorDisplay.style.display = "block";
+    docErrorDisplay.textContent = message;
 }
 
 function hideError() {
-    docErrorDisplay.textContent = "";
     docErrorDisplay.style.display = "none";
+    docErrorDisplay.textContent = "";
 }

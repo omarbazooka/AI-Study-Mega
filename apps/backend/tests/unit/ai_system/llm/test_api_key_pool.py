@@ -3,7 +3,8 @@ from app.ai_system.services.llm.api_key_pool import APIKey, APIKeyPool
 from app.ai_system.services.llm.exceptions import AllKeysExhaustedException
 
 def test_api_key_availability():
-    key = APIKey(value="test_val", alias="TEST_KEY")
+    pool = APIKeyPool()
+    key = APIKey(value="test_val", alias="TEST_KEY", pool=pool)
     assert key.is_available() is True
 
     # Check active status
@@ -23,8 +24,8 @@ def test_key_pool_exhaustion():
     
     # Override keys in pool manually for testing
     pool._keys["FAST"] = [
-        APIKey(value="key1", alias="FAST_1"),
-        APIKey(value="key2", alias="FAST_2")
+        APIKey(value="key1", alias="FAST_1", pool=pool),
+        APIKey(value="key2", alias="FAST_2", pool=pool)
     ]
 
     key_1 = pool.get_available_key("FAST")
@@ -40,8 +41,8 @@ def test_key_pool_exhaustion():
 def test_key_pool_round_robin_rotation():
     pool = APIKeyPool()
     pool._keys["FAST"] = [
-        APIKey(value="key1", alias="FAST_1"),
-        APIKey(value="key2", alias="FAST_2")
+        APIKey(value="key1", alias="FAST_1", pool=pool),
+        APIKey(value="key2", alias="FAST_2", pool=pool)
     ]
     pool._current_index["FAST"] = 0
 

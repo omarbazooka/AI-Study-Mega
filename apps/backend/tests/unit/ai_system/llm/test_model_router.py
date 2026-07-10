@@ -10,11 +10,11 @@ def test_model_router_mappings():
     assert config_quiz.key_group == "REASONING"
 
     config_eval = ModelRouter.route_task("answer_evaluation")
-    assert config_eval.key_group == "REASONING"
+    assert config_eval.key_group == "VERIFIER"
 
     # Test orchestrator task mappings
     config_chat = ModelRouter.route_task("chat_answer")
-    assert config_chat.key_group == "FAST"
+    assert config_chat.key_group == "REASONING"
 
     config_explain = ModelRouter.route_task("explain")
     assert config_explain.key_group == "REASONING"

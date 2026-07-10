@@ -476,3 +476,95 @@ button:disabled {
     width: 100%;
 }
 
+/* RTL text styling */
+.rtl-text {
+    direction: rtl;
+    text-align: right;
+}
+
+/* Quiz interactive card styles */
+.quiz-card {
+    background-color: #1e1e1e;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 20px;
+    margin: 15px 0;
+    width: 100%;
+    color: #e0e0e0;
+}
+
+.quiz-title {
+    font-size: 1.15rem;
+    font-weight: bold;
+    color: #fff;
+    margin-bottom: 15px;
+    border-bottom: 1px solid #333;
+    padding-bottom: 8px;
+}
+
+.quiz-question {
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px dashed #2d2d2d;
+}
+
+.quiz-question-text {
+    font-size: 0.95rem;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.quiz-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.quiz-option-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #181818;
+    border: 1px solid #2d2d2d;
+    padding: 10px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.quiz-option-label:hover {
+    background: #222;
+    border-color: #444;
+}
+
+.quiz-submit-btn {
+    width: 100%;
+    margin-top: 12px;
+}
+
+/* Quiz Grading review statuses */
+.quiz-option-label.correct {
+    background-color: rgba(76, 175, 80, 0.15);
+    border-color: #4caf50;
+    color: #4caf50;
+}
+
+.quiz-option-label.incorrect {
+    background-color: rgba(244, 67, 54, 0.15);
+    border-color: #f44336;
+    color: #f44336;
+}
+
+.quiz-explanation {
+    font-size: 0.85rem;
+    color: #aaa;
+    margin-top: 10px;
+    padding: 10px;
+    background: #151515;
+    border-left: 3px solid #6200ee;
+    border-radius: 2px;
+}
+
+

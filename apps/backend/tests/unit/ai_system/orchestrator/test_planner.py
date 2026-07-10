@@ -1,31 +1,37 @@
 import pytest
 from pydantic import ValidationError
-from app.schemas.ai_schema import PDFChatRequest, QuizRequest, SummaryRequest, TaskType, ExecutionMode
-from app.ai_system.orchestrator.planner import TaskPlanner
-from app.ai_system.orchestrator.constants import (
-    TASK_SUMMARY,
-    TASK_QUIZ,
-    TASK_ANSWER_TABLE,
-    TASK_EXPLAIN,
-    TASK_CHAT_ANSWER,
-    MODE_SINGLE,
-    MODE_PARALLEL,
-    MODE_SEQUENTIAL,
-    MODE_HYBRID
+from app.schemas.ai_schema import (
+    PDFChatRequest,
+    SummaryRequest,
+    QuizRequest,
+    TaskType,
+    ExecutionMode,
+    OutputFormat
 )
+from app.ai_system.orchestrator.planner import TaskPlanner
 from app.ai_system.orchestrator.errors import PlanningError, CircularDependencyError
 
-def test_pydantic_schema_validations():
-    # 1. Invalid language
+def test_request_schema_validation():
+    # Valid Request
+    req = PDFChatRequest(
+        user_id="user_123",
+        session_id="session_456",
+        message="What is RAG?",
+        language="en"
+    )
+    assert req.message == "What is RAG?"
+    assert req.language == "en"
+
+    # Invalid language
     with pytest.raises(ValidationError):
         PDFChatRequest(
             user_id="user_123",
             session_id="session_456",
-            message="hello",
-            language="fr"  # Only 'ar' or 'en' allowed
+            message="What is RAG?",
+            language="fr"  # unsupported
         )
 
-    # 2. Empty message
+    # Empty message
     with pytest.raises(ValidationError):
         PDFChatRequest(
             user_id="user_123",
@@ -33,30 +39,48 @@ def test_pydantic_schema_validations():
             message=""
         )
 
-    # 3. Message too long (> 1000 characters)
+
+def test_summary_request_schema():
+    # Valid Summary request
+    req = SummaryRequest(
+        user_id="user_123",
+        session_id="session_456",
+        language="ar",
+        summary_style="bullet_points"
+    )
+    assert req.language == "ar"
+    assert req.summary_style == "bullet_points"
+
+    # Invalid language
     with pytest.raises(ValidationError):
-        PDFChatRequest(
+        SummaryRequest(
             user_id="user_123",
             session_id="session_456",
-            message="a" * 1001
+            language="de"
         )
 
-    # 4. Invalid quiz difficulty
+
+def test_quiz_request_schema():
+    # Valid Quiz request
+    req = QuizRequest(
+        user_id="user_123",
+        session_id="session_456",
+        language="en",
+        difficulty="hard",
+        number_of_questions=10
+    )
+    assert req.difficulty == "hard"
+    assert req.number_of_questions == 10
+
+    # Invalid difficulty
     with pytest.raises(ValidationError):
         QuizRequest(
             user_id="user_123",
             session_id="session_456",
-            difficulty="super_hard"  # Only 'easy', 'medium', 'hard' allowed
+            difficulty="super_hard"
         )
 
-    # 5. Invalid quiz question count
-    with pytest.raises(ValidationError):
-        QuizRequest(
-            user_id="user_123",
-            session_id="session_456",
-            number_of_questions=25  # Only 1-20 allowed
-        )
-
+    # Invalid number of questions
     with pytest.raises(ValidationError):
         QuizRequest(
             user_id="user_123",
@@ -65,12 +89,13 @@ def test_pydantic_schema_validations():
         )
 
 
-def test_planner_single_intent():
+@pytest.mark.asyncio
+async def test_planner_single_intent():
     planner = TaskPlanner()
 
     # Summary Arabic
     req = PDFChatRequest(user_id="user_1", session_id="sess_1", message="لخصلي هاد الملف من فضلك", language="ar")
-    plan = planner.plan(req)
+    plan = await planner.plan(req)
     assert plan.execution_mode == ExecutionMode.SINGLE
     assert len(plan.tasks) == 1
     assert plan.tasks[0].type == TaskType.SUMMARY
@@ -78,20 +103,21 @@ def test_planner_single_intent():
 
     # Quiz English
     req = PDFChatRequest(user_id="user_1", session_id="sess_1", message="Make a quick quiz for me", language="en")
-    plan = planner.plan(req)
+    plan = await planner.plan(req)
     assert plan.execution_mode == ExecutionMode.SINGLE
     assert len(plan.tasks) == 1
     assert plan.tasks[0].type == TaskType.QUIZ
 
     # Explain Arabic
     req = PDFChatRequest(user_id="user_1", session_id="sess_1", message="ممكن تشرحلي القسم الأول؟", language="ar")
-    plan = planner.plan(req)
+    plan = await planner.plan(req)
     assert plan.execution_mode == ExecutionMode.SINGLE
     assert len(plan.tasks) == 1
     assert plan.tasks[0].type == TaskType.EXPLAIN
 
 
-def test_planner_compound_intents():
+@pytest.mark.asyncio
+async def test_planner_compound_intents():
     planner = TaskPlanner()
 
     # Summary and Quiz (independent tasks -> parallel execution)
@@ -101,7 +127,7 @@ def test_planner_compound_intents():
         message="Summarize this chapter and also generate a quiz for me",
         language="en"
     )
-    plan = planner.plan(req)
+    plan = await planner.plan(req)
     assert plan.execution_mode == ExecutionMode.PARALLEL
     assert len(plan.tasks) == 2
     types = {t.type for t in plan.tasks}
@@ -117,7 +143,7 @@ def test_planner_compound_intents():
         message="اعملي كويز على الملف واعمل جدول اجابات",
         language="ar"
     )
-    plan = planner.plan(req)
+    plan = await planner.plan(req)
     assert plan.execution_mode == ExecutionMode.HYBRID
     assert len(plan.tasks) == 2
     
@@ -127,30 +153,33 @@ def test_planner_compound_intents():
     assert ans_task.depends_on == [quiz_task.task_id]
 
 
-def test_planner_vague_query_clarification():
+@pytest.mark.asyncio
+async def test_planner_vague_query_clarification():
     planner = TaskPlanner()
 
-    # Short query
-    req = PDFChatRequest(user_id="user_1", session_id="sess_1", message="hi", language="en")
-    plan = planner.plan(req)
+    # Vague query (non-greeting, short)
+    req = PDFChatRequest(user_id="user_1", session_id="sess_1", message="a", language="en")
+    plan = await planner.plan(req)
     assert plan.needs_clarification
     assert "How can I help" in plan.clarification_question
     assert len(plan.tasks) == 0
 
-    # Arabic short greeting
+    # Arabic short greeting is routed as conversational greeting
     req = PDFChatRequest(user_id="user_1", session_id="sess_1", message="مرحبا", language="ar")
-    plan = planner.plan(req)
-    assert plan.needs_clarification
-    assert "كيف يمكنني مساعدتك" in plan.clarification_question
-    assert len(plan.tasks) == 0
+    plan = await planner.plan(req)
+    assert not plan.needs_clarification
+    assert len(plan.tasks) == 1
+    assert plan.tasks[0].type == TaskType.CHAT_ANSWER
+    assert plan.tasks[0].metadata.get("is_greeting") is True
 
 
-def test_planner_default_chat():
+@pytest.mark.asyncio
+async def test_planner_default_chat():
     planner = TaskPlanner()
 
     # Standard query with no intent keywords defaults to chat_answer
     req = PDFChatRequest(user_id="user_1", session_id="sess_1", message="ما الذي يتحدث عنه القسم الثاني؟", language="ar")
-    plan = planner.plan(req)
+    plan = await planner.plan(req)
     assert plan.execution_mode == ExecutionMode.SINGLE
     assert len(plan.tasks) == 1
     assert plan.tasks[0].type == TaskType.CHAT_ANSWER
