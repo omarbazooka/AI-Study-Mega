@@ -16,8 +16,12 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Parse CORS allowed origins
-cors_origins = [origin.strip() for origin in settings.CORS_ALLOWED_ORIGINS.split(",") if origin.strip()]
+# Parse CORS allowed origins and strip any literal quotes or trailing slashes
+cors_origins = [
+    origin.strip().strip("'").strip('"').rstrip("/")
+    for origin in settings.CORS_ALLOWED_ORIGINS.split(",")
+    if origin.strip()
+]
 
 # Enable CORS (Cross-Origin Resource Sharing)
 app.add_middleware(
