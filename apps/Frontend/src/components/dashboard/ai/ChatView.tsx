@@ -19,10 +19,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
   isSending,
   isLoadingHistory,
 }) => {
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (containerRef.current) {
+      containerRef.current.scrollTo({
+        top: containerRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
   }, [messages, currentAssistantText]);
 
   if (isLoadingHistory) {
@@ -67,7 +72,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
     : null;
 
   return (
-    <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4.5 scrollbar-hide">
+    <div 
+      ref={containerRef}
+      className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4.5 scrollbar-hide"
+    >
       {messages.map((msg) => (
         <ChatMessage key={msg.id} message={msg} />
       ))}
@@ -85,8 +93,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
           </div>
         </div>
       )}
-
-      <div ref={bottomRef} />
     </div>
   );
 };
