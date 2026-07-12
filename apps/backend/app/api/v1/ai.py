@@ -29,7 +29,7 @@ async def chat_with_pdf(
     PDF-bound conversational search. Accepts any PDF-grounded user query, detects intent,
     plans subtasks (single/compound), executes them over document chunks, and aggregates responses.
     """
-    await validate_session_ownership_and_document(request.session_id, document_id, current_user_id)
+    await validate_session_ownership_and_document(request.session_id, document_id, current_user_id, create_if_missing=True)
     try:
         request.user_id = current_user_id
         response = await ai_orchestrator_service.execute_query(
@@ -80,7 +80,7 @@ async def summarize_pdf(
     Shortcut endpoint to generate a document-level summary.
     Schedules a single 'summary' task utilizing document-level context chunks.
     """
-    await validate_session_ownership_and_document(request.session_id, document_id, current_user_id)
+    await validate_session_ownership_and_document(request.session_id, document_id, current_user_id, create_if_missing=True)
     try:
         request.user_id = current_user_id
         response = await ai_orchestrator_service.execute_query(
@@ -126,7 +126,7 @@ async def generate_pdf_quiz(
     Shortcut endpoint to generate a quiz from the PDF document.
     Schedules a single 'quiz' task utilizing document-level context chunks.
     """
-    await validate_session_ownership_and_document(request.session_id, document_id, current_user_id)
+    await validate_session_ownership_and_document(request.session_id, document_id, current_user_id, create_if_missing=True)
     try:
         request.user_id = current_user_id
         response = await ai_orchestrator_service.execute_query(
@@ -351,7 +351,7 @@ async def chat_with_pdf_stream(
     Progressive search stream returning NDJSON progress steps.
     """
     # Validate session binding
-    await validate_session_ownership_and_document(request.session_id, document_id, current_user_id)
+    await validate_session_ownership_and_document(request.session_id, document_id, current_user_id, create_if_missing=True)
     # 1. Ownership & Access Validation
     try:
         from app.ai_system.orchestrator.document_guard import validate_document_access

@@ -8,7 +8,8 @@ logger = logging.getLogger(__name__)
 async def validate_session_ownership_and_document(
     session_id: str, 
     document_id: str, 
-    user_id: str
+    user_id: str,
+    create_if_missing: bool = False
 ) -> Dict[str, Any]:
     """
     Validates:
@@ -28,8 +29,18 @@ async def validate_session_ownership_and_document(
 
     session = await chat_repository.get_chat_session(session_id)
     if not session:
-        logger.warning(f"Session {session_id} not found.")
-        raise HTTPException(status_code=404, detail="SESSION_NOT_FOUND")
+        if not create_if_missing:
+            logger.warning(f"Session {session_id} not found.")
+            raise HTTPException(status_code=404, detail="SESSION_NOT_FOUND")
+
+        # Validate that the user owns the document before creating the session on the fly
+        doc = await document_repository.get_by_id(document_id)
+        if not doc:
+            raise HTTPException(status_code=404, detail="DOCUMENT_NOT_FOUND")
+        if str(doc.get("user_id")) != str(user_id):
+            raise HTTPException(status_code=403, detail="DOCUMENT_ACCESS_DENIED")
+        
+        session = await chat_repository.create_chat_session(user_id, session_id, document_id)
         
     if str(session.get("user_id")) != str(user_id):
         logger.warning(f"Session {session_id} owner mismatch: {session.get('user_id')} != {user_id}")

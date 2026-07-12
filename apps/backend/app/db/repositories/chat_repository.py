@@ -29,6 +29,12 @@ async def get_chat_session(session_id: str) -> Optional[Dict[str, Any]]:
     response = supabase.table("chat_sessions").select("*").eq("id", session_id).execute()
     return response.data[0] if response.data else None
 
+async def update_chat_session_title(session_id: str, title: str) -> Dict[str, Any]:
+    """Updates the title of a chat session in PostgreSQL."""
+    logger.info(f"[DB] Updating chat session {session_id} title to: {title}")
+    response = supabase.table("chat_sessions").update({"title": title}).eq("id", session_id).execute()
+    return response.data[0] if response.data else {}
+
 async def save_message(
     session_id: str,
     user_id: str,
@@ -47,6 +53,23 @@ async def save_message(
     # Ensure session exists first
     await create_chat_session(user_id, session_id, document_id)
     
+    # If this is the first message of the session, generate and save title in background
+    if role == "user" and content:
+        session = await get_chat_session(session_id)
+        if session and not session.get("title"):
+            import asyncio
+            async def _bg_title_gen():
+                try:
+                    from app.ai_system.services.llm.generation_service import GenerationService
+                    gen_service = GenerationService()
+                    title = await gen_service.generate_chat_title(content)
+                    if title:
+                        await update_chat_session_title(session_id, title)
+                except Exception as e:
+                    logger.error(f"Failed to generate/save chat title in background: {e}")
+            
+            asyncio.create_task(_bg_title_gen())
+
     row = {
         "session_id": session_id,
         "user_id": user_id,
@@ -80,7 +103,7 @@ async def get_session_messages(session_id: str, limit: int = 50) -> List[Dict[st
     return response.data or []
 
 async def get_document_sessions(user_id: str, document_id: str) -> List[Dict[str, Any]]:
-    """Retrieves all chat sessions for a specific user and document, ordered by updated_at descending, including first message as title."""
+    """Retrieves all non-empty chat sessions for a specific user and document, ordered by updated_at descending, including title."""
     response = (
         supabase.table("chat_sessions")
         .select("*")
@@ -111,9 +134,17 @@ async def get_document_sessions(user_id: str, document_id: str) -> List[Dict[str
             
     results = []
     for s in sessions:
-        title = first_msgs.get(s["id"], "New Chat")
+        # Filter out empty sessions
+        if s["id"] not in first_msgs:
+            continue
+            
+        title = s.get("title")
+        if not title or title.strip() == "":
+            raw_title = first_msgs.get(s["id"], "New Chat")
+            title = raw_title[:50] + "..." if len(raw_title) > 50 else raw_title
+            
         results.append({
             **s,
-            "title": title[:50] + "..." if len(title) > 50 else title
+            "title": title
         })
     return results

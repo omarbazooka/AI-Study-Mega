@@ -298,3 +298,49 @@ class GenerationService:
             source_chunk_ids=source_chunk_ids,
             usage_metrics=metrics
         )
+
+    async def generate_chat_title(self, first_user_message: str) -> str:
+        """Generates a concise, representative title for the chat from the first user message."""
+        from .model_router import resolve_config_for_role, LLMRole, ROLE_PROFILE_MAP
+        try:
+            role = LLMRole.PLANNER
+            _, model_name = resolve_config_for_role(role)
+            profile = ROLE_PROFILE_MAP[role]
+            profile_upper = profile.value.upper()
+            
+            legacy_mapping = {
+                "PLANNING": "FAST",
+                "MEMORY_MAP": "SUMMARY",
+                "EXECUTION_REDUCE": "REASONING",
+                "VERIFICATION": "VERIFIER",
+                "QUIZ": "REASONING"
+            }
+            key_group = legacy_mapping.get(profile_upper, profile_upper)
+
+            prompt = (
+                "You are a helpful AI assistant. Based on the user's first message in a chat session, "
+                "generate a short, concise, and representative title for this chat. "
+                "The title should be in the same language as the user's message (e.g. Arabic if the message contains Arabic, English if English). "
+                "Keep the title between 2 to 5 words maximum. "
+                "Return ONLY the title text, with no quotes, formatting, or extra commentary.\n\n"
+                f"User's message:\n{first_user_message}\n\n"
+                "Title:"
+            )
+
+            result = await self._execute_with_failover(
+                task_type="query_rewrite", # uses planning profile
+                model_name=model_name,
+                key_group=key_group,
+                prompt=prompt,
+                temperature=0.3
+            )
+            title = result["text"].strip()
+            # Clean up potential surrounding quotes
+            if title.startswith('"') and title.endswith('"'):
+                title = title[1:-1].strip()
+            if title.startswith("'") and title.endswith("'"):
+                title = title[1:-1].strip()
+            return title
+        except Exception as e:
+            logger.error(f"Error in generate_chat_title: {e}")
+            return "New Chat"

@@ -391,7 +391,7 @@ def test_ai_endpoints_session_validation_success(mock_validate, endpoint_suffix,
         
         response = client.post(f"/api/v1/documents/doc-xyz/{endpoint_suffix}", json=payload)
         assert response.status_code in [200, 201, 202]
-        mock_validate.assert_called_once_with("00000000-0000-0000-0000-000000000001", "doc-xyz", MOCK_USER)
+        mock_validate.assert_called_once_with("00000000-0000-0000-0000-000000000001", "doc-xyz", MOCK_USER, create_if_missing=True)
 
 @pytest.mark.parametrize("endpoint_suffix", ["chat", "chat/stream", "summary", "quiz"])
 def test_ai_endpoints_session_validation_failures(endpoint_suffix, mock_auth):
@@ -421,13 +421,15 @@ def test_ai_endpoints_session_validation_failures(endpoint_suffix, mock_auth):
         assert response.status_code == 400
         assert response.json()["detail"] == "SESSION_DOCUMENT_MISMATCH"
 
-    # 3. Missing session is rejected (404)
-    with patch("app.services.session_service.chat_repository.get_chat_session", new_callable=AsyncMock) as mock_get_session:
+    # 3. Missing session with missing document is rejected (404)
+    with patch("app.services.session_service.chat_repository.get_chat_session", new_callable=AsyncMock) as mock_get_session, \
+         patch("app.services.session_service.document_repository.get_by_id", new_callable=AsyncMock) as mock_get_doc:
         mock_get_session.return_value = None
+        mock_get_doc.return_value = None
         payload = {"session_id": "00000000-0000-0000-0000-000000000001", "message": "query"}
         response = client.post(f"/api/v1/documents/doc-xyz/{endpoint_suffix}", json=payload)
         assert response.status_code == 404
-        assert response.json()["detail"] == "SESSION_NOT_FOUND"
+        assert response.json()["detail"] == "DOCUMENT_NOT_FOUND"
 
     # 4. Legacy document_id NULL session is rejected (400)
     with patch("app.services.session_service.chat_repository.get_chat_session", new_callable=AsyncMock) as mock_get_session:

@@ -6,6 +6,7 @@ import { MessageItem } from "@/types/api/sessions";
 import { Citation } from "@/types/api/ai";
 import { ApiError } from "@/types/api/common";
 import { toast } from "sonner";
+import { v4 as uuidv4 } from "uuid";
 
 interface UseAIChatStreamProps {
   documentId: string | null;
@@ -49,8 +50,8 @@ export function useAIChatStream({ documentId, userId, documentReady }: UseAIChat
     setMessages([]);
     cancelCurrentStream();
     try {
-      const response = await sessionsService.createDocumentSession(documentId);
-      setSessionId(response.id);
+      const newSessionId = uuidv4();
+      setSessionId(newSessionId);
     } catch (err) {
       console.error("Failed to start new chat:", err);
       toast.error("Failed to start new chat.");
@@ -84,8 +85,8 @@ export function useAIChatStream({ documentId, userId, documentReady }: UseAIChat
 
     isCreatingSession.current = true;
     try {
-      const response = await sessionsService.createDocumentSession(docId);
-      setSessionId(response.id);
+      const newSessionId = uuidv4();
+      setSessionId(newSessionId);
       isCreatingSession.current = false;
     } catch (err: any) {
       isCreatingSession.current = false;
