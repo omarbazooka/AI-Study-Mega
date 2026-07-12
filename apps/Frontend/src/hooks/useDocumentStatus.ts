@@ -9,8 +9,13 @@ interface UseDocumentStatusOptions {
   onFailed?: (errorMessage?: string | null) => void;
 }
 
-export function useDocumentStatus(documentId: string | null, options?: UseDocumentStatusOptions) {
-  const [status, setStatus] = useState<DocumentStatus | null>(null);
+export function useDocumentStatus(
+  documentId: string | null,
+  initialStatus?: DocumentStatus | null,
+  isDocsLoading?: boolean,
+  options?: UseDocumentStatusOptions
+) {
+  const [status, setStatus] = useState<DocumentStatus | null>(initialStatus || null);
   const [details, setDetails] = useState<StatusResponse | null>(null);
   const [isPolling, setIsPolling] = useState<boolean>(false);
   const [isReprocessing, setIsReprocessing] = useState<boolean>(false);
@@ -19,6 +24,13 @@ export function useDocumentStatus(documentId: string | null, options?: UseDocume
   const activePollDocId = useRef<string | null>(null);
   const optionsRef = useRef(options);
   optionsRef.current = options;
+
+  // Sync state when initialStatus changes
+  useEffect(() => {
+    if (initialStatus) {
+      setStatus(initialStatus);
+    }
+  }, [initialStatus]);
 
   const stopPolling = useCallback(() => {
     if (pollTimerRef.current) {
@@ -86,9 +98,12 @@ export function useDocumentStatus(documentId: string | null, options?: UseDocume
   }, [stopPolling]);
 
   useEffect(() => {
-    if (documentId) {
-      startPolling(documentId);
-    } else {
+    if (documentId && !isDocsLoading) {
+      const currentStatus = status || initialStatus;
+      if (currentStatus !== "ready" && currentStatus !== "failed") {
+        startPolling(documentId);
+      }
+    } else if (!documentId && !isDocsLoading) {
       setStatus(null);
       setDetails(null);
       stopPolling();
@@ -97,7 +112,9 @@ export function useDocumentStatus(documentId: string | null, options?: UseDocume
     return () => {
       stopPolling();
     };
-  }, [documentId, startPolling, stopPolling]);
+    // Only re-run when documentId or loading status changes to prevent loops
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentId, isDocsLoading]);
 
   const reprocess = async () => {
     if (!documentId) return;

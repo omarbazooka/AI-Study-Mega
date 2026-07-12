@@ -42,6 +42,7 @@ export const AIPanelContainer: React.FC<AIPanelContainerProps> = ({
     documents,
     isLoading: isDocsLoading,
     activeDocumentId,
+    activeDocument,
     setActiveDocumentId,
     refreshDocuments,
   } = useDocuments();
@@ -66,7 +67,7 @@ export const AIPanelContainer: React.FC<AIPanelContainerProps> = ({
     details: docDetails,
     isReprocessing,
     reprocess,
-  } = useDocumentStatus(activeDocumentId, {
+  } = useDocumentStatus(activeDocumentId, activeDocument?.upload_status, isDocsLoading, {
     onReady: () => {
       refreshDocuments();
     },
