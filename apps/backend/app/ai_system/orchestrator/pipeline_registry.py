@@ -85,11 +85,53 @@ def build_citations(retrieved_chunks: List[Any], llm_output: str, source_chunk_i
         
     val_chunks = []
     for c in retrieved_chunks:
-        c_id = c.chunk_id if hasattr(c, "chunk_id") else c.get("id") or c.get("chunk_id")
-        text = c.text if hasattr(c, "text") else c.get("content", "")
-        page = c.page_number if hasattr(c, "page_number") else c.get("page_start", 1)
-        section = c.section_title if hasattr(c, "section_title") else c.get("section_title")
-        score = c.score if hasattr(c, "score") else c.get("score", 0.90)
+        # Resolve ID
+        if hasattr(c, "chunk_id") and getattr(c, "chunk_id") is not None:
+            c_id = c.chunk_id
+        elif hasattr(c, "id") and getattr(c, "id") is not None:
+            c_id = c.id
+        elif isinstance(c, dict):
+            c_id = c.get("chunk_id") or c.get("id")
+        else:
+            c_id = None
+
+        # Resolve Text
+        if hasattr(c, "text") and getattr(c, "text") is not None:
+            text = c.text
+        elif hasattr(c, "content") and getattr(c, "content") is not None:
+            text = c.content
+        elif isinstance(c, dict):
+            text = c.get("text") or c.get("content", "")
+        else:
+            text = ""
+
+        # Resolve Page
+        if hasattr(c, "page_number") and getattr(c, "page_number") is not None:
+            page = c.page_number
+        elif hasattr(c, "page_start") and getattr(c, "page_start") is not None:
+            page = c.page_start
+        elif isinstance(c, dict):
+            page = c.get("page_number") or c.get("page_start", 1)
+        else:
+            page = 1
+
+        # Resolve Section
+        if hasattr(c, "section_title") and getattr(c, "section_title") is not None:
+            section = c.section_title
+        elif isinstance(c, dict):
+            section = c.get("section_title")
+        else:
+            section = None
+
+        # Resolve Score
+        if hasattr(c, "similarity_score") and getattr(c, "similarity_score") is not None:
+            score = c.similarity_score
+        elif hasattr(c, "score") and getattr(c, "score") is not None:
+            score = c.score
+        elif isinstance(c, dict):
+            score = c.get("similarity_score") or c.get("score", 0.90)
+        else:
+            score = 0.90
         
         val_chunks.append(ValRetrievedChunk(
             chunk_id=str(c_id),
@@ -157,34 +199,88 @@ async def execute_common_pipeline_steps(
     session_id = getattr(request, "session_id", "sess-xyz")
     document_id = getattr(request, "document_id", None)
     lang = getattr(request, "language", "ar")
+    retrieval_result = getattr(request, "_retrieval_result", None)
 
     # 2. Retrieve relevant chunks via the RAG retrieval module.
-    retrieval_result = None
     chunks = []
+    val_chunks = []
+    evidence_status_str = "sufficient"
+    
     if document_id and task.retrieval_required:
-        retrieval_result = await document_retriever.retrieve(RetrievalRequest(
-            user_id=user_id,
-            document_id=document_id,
-            query=task.query,
-            intent=task_type.value,
-        ))
+        from app.ai_system.validation.context_collector import collect_context
+        from app.ai_system.validation.evidence_gate import validate_evidence
+        from app.ai_system.validation.schemas import ExecutionStrategy, EvidenceStatus, DocumentTaskType, ResponseStrategy
         
-        # 3. Check for empty/unusable RAG context -> strict grounding fallback
-        if retrieval_result.status != RetrievalStatus.FOUND:
+        strategy = ExecutionStrategy.focused_retrieval
+        primary_task = DocumentTaskType.document_factual_qa
+        validation_res = getattr(request, "_input_validation", None)
+        if validation_res:
+            strategy = validation_res.context_strategy or ExecutionStrategy.focused_retrieval
+            primary_task = validation_res.primary_task or DocumentTaskType.document_factual_qa
+            
+        val_chunks = await collect_context(
+            strategy=strategy,
+            query=task.query,
+            document_id=document_id,
+            user_id=user_id,
+            request=request
+        )
+        retrieval_result = getattr(request, "_retrieval_result", None)
+        
+        # 3. Check evidence sufficiency
+        evidence_res = await validate_evidence(
+            primary_task=primary_task,
+            collected_chunks=val_chunks,
+            query=task.query
+        )
+        evidence_status_str = evidence_res.evidence_status.value
+        
+        # If insufficient, skip Executor LLM and verify loop entirely!
+        if evidence_res.evidence_status == EvidenceStatus.insufficient:
+            from app.ai_system.validation.dynamic_response import compose_dynamic_response
+            out_of_scope_content = compose_dynamic_response(
+                ResponseStrategy.generate_out_of_scope_response,
+                lang=lang
+            )
+            
+            # Deterministic Output Verifier check
+            from app.ai_system.validation.verifier import verify_response
+            verification = await verify_response(
+                user_query=task.query,
+                task_type=task_type,
+                retrieved_chunks=val_chunks,
+                executor_output=out_of_scope_content,
+                response_strategy=ResponseStrategy.generate_out_of_scope_response,
+                primary_task=primary_task
+            )
+            
             if hasattr(request, "_trace_stages"):
                 request._trace_stages.append({
                     "stage": "retriever",
                     "status": "failed",
-                    "chunks_found": 0
+                    "chunks_found": len(val_chunks)
                 })
             return TaskResult(
                 task_id=task.task_id,
                 type=task_type,
                 status="no_answer",
-                content=NO_ANSWER_FALLBACK,
+                content=verification.final_answer or out_of_scope_content,
                 citations=[],
                 confidence=0.0,
-                metadata={"mock": is_mock, "retrieval_status": retrieval_result.status.value}
+                metadata={"mock": is_mock, "evidence_status": "insufficient"}
+            )
+            
+        elif evidence_res.evidence_status == EvidenceStatus.partial:
+            # Partially answer supported parts, warn about unsupported facts
+            task.query += (
+                "\n\n[System directive: Answer only the parts supported by context. "
+                "If information is missing, do not invent facts. Use placeholders like [Add result here] for missing facts.]"
+            )
+            
+        elif evidence_res.evidence_status == EvidenceStatus.conflicting:
+            task.query += (
+                "\n\n[System directive: The document chunks contain conflicting information. "
+                "Present the conflicting views clearly and ask the user for clarification.]"
             )
             
         chunks = [
@@ -193,8 +289,9 @@ async def execute_common_pipeline_steps(
                 "content": c.text,
                 "page_start": c.page_number or 1,
             }
-            for c in retrieval_result.chunks
+            for c in val_chunks
         ]
+        
         if hasattr(request, "_trace_stages"):
             request._trace_stages.append({
                 "stage": "retriever",
@@ -202,7 +299,6 @@ async def execute_common_pipeline_steps(
                 "chunks_found": len(chunks)
             })
     elif task.retrieval_required:
-        # Retrieval is required but document_id is missing
         if hasattr(request, "_trace_stages"):
             request._trace_stages.append({
                 "stage": "retriever",
@@ -377,8 +473,20 @@ async def execute_common_pipeline_steps(
                 # Check verification
                 raw_response = llm_response.output_text if llm_response.output_text is not None else (json.dumps(llm_response.output_json, ensure_ascii=False) if llm_response.output_json else "")
                 
-                citations = build_citations(retrieval_result.chunks if retrieval_result else [], raw_response, llm_response.source_chunk_ids)
+                # If we have low-severity abuse, compose soft boundary warning BEFORE running verifier
+                validation_res = getattr(request, "_input_validation", None)
+                if validation_res and \
+                   validation_res.response_strategy == ResponseStrategy.answer_with_soft_boundary:
+                    from app.ai_system.validation.dynamic_response import GENTLE_ABUSE_WARNING_AR, GENTLE_ABUSE_WARNING_EN
+                    warning_suffix = GENTLE_ABUSE_WARNING_AR if lang == "ar" else GENTLE_ABUSE_WARNING_EN
+                    if warning_suffix not in raw_response:
+                        raw_response = raw_response + warning_suffix
                 
+                citations = build_citations(val_chunks, raw_response, llm_response.source_chunk_ids)
+                
+                strategy_val = validation_res.response_strategy if validation_res else ResponseStrategy.continue_to_planner
+                primary_task_val = validation_res.primary_task if validation_res else None
+
                 verification = await default_verifier_client.verify(
                     user_query=task.query,
                     intent=task_type.value,
@@ -386,7 +494,9 @@ async def execute_common_pipeline_steps(
                     llm_output=raw_response,
                     output_format=task.output_format.value if hasattr(task.output_format, 'value') else str(task.output_format),
                     citations=citations,
-                    policy=policy
+                    policy=policy,
+                    response_strategy=strategy_val,
+                    primary_task=primary_task_val
                 )
                 
                 verification_trace = {

@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from typing import List, Dict, Any, Optional
 from app.schemas.ai_schema import ExecutionPlan, Task, TaskResult, AIResponse, Citation, ExecutionMode
 from app.ai_system.orchestrator.pipeline_registry import PIPELINE_REGISTRY
@@ -11,6 +12,8 @@ from app.ai_system.orchestrator.constants import (
     NO_ANSWER_FALLBACK
 )
 from app.ai_system.orchestrator.errors import AllTasksFailedError, ExecutionError
+
+logger = logging.getLogger(__name__)
 
 class TaskOrchestrator:
     """
@@ -144,6 +147,7 @@ class TaskOrchestrator:
 
             return await pipeline_fn(task, request, previous_results)
         except Exception as e:
+            logger.exception("Task execution failed")
             return TaskResult(
                 task_id=task.task_id,
                 type=task.type,

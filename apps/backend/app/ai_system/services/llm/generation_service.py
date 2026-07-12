@@ -52,18 +52,46 @@ class GenerationService:
         prompt: str,
         system_prompt: Optional[str] = None,
         json_mode: bool = False,
-        temperature: float = 0.1
+        temperature: float = 0.1,
+        fallback_level: int = 0
     ) -> dict:
         """Executes LLM generation with automatic key failover and rate-limit recovery."""
         retries = 0
         max_retries = LLMConfig.MAX_LLM_RETRIES
+
+        fallback_groups = {
+            "PLANNING": ("EXECUTION_REDUCE", "GROQ_EXECUTOR_MODEL"),
+            "intent_detection": ("EXECUTION_REDUCE", "GROQ_EXECUTOR_MODEL"),
+            "FAST": ("REASONING", "GROQ_EXECUTOR_MODEL"),
+            "MEMORY_MAP": ("EXECUTION_REDUCE", "GROQ_EXECUTOR_MODEL"),
+            "SUMMARY": ("REASONING", "GROQ_EXECUTOR_MODEL"),
+            "EXECUTION_REDUCE": ("VERIFICATION", "GROQ_VERIFIER_MODEL"),
+            "REASONING": ("VERIFIER", "GROQ_VERIFIER_MODEL"),
+            "VERIFICATION": ("PLANNING", "GROQ_PLANNING_MODEL"),
+            "VERIFIER": ("FAST", "GROQ_PLANNING_MODEL")
+        }
 
         while retries <= max_retries:
             try:
                 # Fetch next active key in pool using round-robin
                 key: APIKey = api_key_pool.get_available_key(key_group)
             except AllKeysExhaustedException as e:
-                logger.error(f"Failed to execute task: {e}")
+                logger.error(f"Failed to execute task key retrieval: {e}")
+                if fallback_level < 2 and key_group in fallback_groups:
+                    next_group, next_model_env = fallback_groups[key_group]
+                    from app.core.config import settings
+                    next_model = getattr(settings, next_model_env, "").strip() or settings.GROQ_DEFAULT_MODEL.strip()
+                    logger.warning(f"Key group '{key_group}' exhausted. Falling back to role-compatible model tier '{next_group}' using model '{next_model}'...")
+                    return await self._execute_with_failover(
+                        task_type=task_type,
+                        model_name=next_model,
+                        key_group=next_group,
+                        prompt=prompt,
+                        system_prompt=system_prompt,
+                        json_mode=json_mode,
+                        temperature=temperature,
+                        fallback_level=fallback_level + 1
+                    )
                 raise e
 
             try:
@@ -104,6 +132,23 @@ class GenerationService:
                 retries += 1
                 logger.error(f"Unexpected exception calling provider on key {key.alias}: {exc}")
                 continue
+
+        # If we exhausted retries on this group, check fallback to role-compatible model tier
+        if fallback_level < 2 and key_group in fallback_groups:
+            next_group, next_model_env = fallback_groups[key_group]
+            from app.core.config import settings
+            next_model = getattr(settings, next_model_env, "").strip() or settings.GROQ_DEFAULT_MODEL.strip()
+            logger.warning(f"Retries exhausted for key group '{key_group}'. Falling back to role-compatible model tier '{next_group}' using model '{next_model}'...")
+            return await self._execute_with_failover(
+                task_type=task_type,
+                model_name=next_model,
+                key_group=next_group,
+                prompt=prompt,
+                system_prompt=system_prompt,
+                json_mode=json_mode,
+                temperature=temperature,
+                fallback_level=fallback_level + 1
+            )
 
         raise ProviderException("groq", "Failed to complete LLM execution after key rotation limits reached.")
 

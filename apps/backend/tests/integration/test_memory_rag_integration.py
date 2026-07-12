@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 from unittest.mock import AsyncMock, patch
+import json
 from app.main import app
 from app.ai_system.memory.memory_types import MemoryContext
 from app.ai_system.retrieval.schemas import (
@@ -67,6 +68,7 @@ def test_memory_contains_context_but_rag_returns_zero_chunks(
     assert data["status"] == "no_answer"
     assert data["message"] == "لم أجد إجابة واضحة في الملف المرفوع."
 
+@patch("app.ai_system.validation.input_validator.validate_input", new_callable=AsyncMock)
 @patch("app.ai_system.orchestrator.document_guard.get_chunks_by_document", new_callable=AsyncMock)
 @patch("app.ai_system.validation.verifier.verify_response", new_callable=AsyncMock)
 @patch("app.ai_system.orchestrator.pipeline_registry.document_retriever.retrieve", new_callable=AsyncMock)
@@ -77,7 +79,7 @@ def test_memory_contains_context_but_rag_returns_zero_chunks(
 @patch("app.ai_system.orchestrator.pipeline_registry.llm_generate", new_callable=AsyncMock)
 @patch("app.db.repositories.document_repository.get_by_id")
 def test_memory_and_retrieval_combine_on_success(
-    mock_doc, mock_llm_gen, mock_summarize, mock_store_save, mock_chat_save, mock_ctx, mock_retrieve, mock_verify, mock_chunks
+    mock_doc, mock_llm_gen, mock_summarize, mock_store_save, mock_chat_save, mock_ctx, mock_retrieve, mock_verify, mock_chunks, mock_validate_input
 ):
     """
     Positive-path integration test: when the retriever finds grounded chunks AND memory
@@ -86,7 +88,23 @@ def test_memory_and_retrieval_combine_on_success(
     than operating independently.
     """
     from app.ai_system.services.llm.schemas import LLMResponsePayload, LLMUsageMetrics
-    from app.ai_system.validation.schemas import VerificationResult as ValVerificationResult, VerifierAction
+    from app.ai_system.validation.schemas import (
+        VerificationResult as ValVerificationResult, VerifierAction,
+        InputValidationResult, RequestType, DocumentTaskType,
+        ExecutionStrategy, ResponseStrategy, InputAction
+    )
+
+    mock_validate_input.return_value = InputValidationResult(
+        valid=True,
+        sanitized_input="explain photosynthesis",
+        language="en",
+        request_type=RequestType.document_task,
+        primary_task=DocumentTaskType.document_factual_qa,
+        context_strategy=ExecutionStrategy.focused_retrieval,
+        allow_pipeline=True,
+        response_strategy=ResponseStrategy.continue_to_planner,
+        action=InputAction.CONTINUE
+    )
 
     mock_chunks.return_value = [{"chunk_id": "chunk-1", "embedding": [0.1] * 1536}]
     mock_verify.return_value = ValVerificationResult(

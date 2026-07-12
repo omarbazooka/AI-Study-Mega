@@ -312,6 +312,8 @@ def test_summary_shortcut_success(mock_repo):
     }
 
     response = client.post("/api/v1/documents/00000000-0000-0000-0000-000000000123/summary", json=payload)
+    if response.status_code != 200:
+        print("SUMMARY FAIL DETAIL:", response.text)
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "success"
@@ -336,6 +338,8 @@ def test_quiz_shortcut_success(mock_repo):
     }
 
     response = client.post("/api/v1/documents/00000000-0000-0000-0000-000000000123/quiz", json=payload)
+    if response.status_code != 200:
+        print("QUIZ FAIL DETAIL:", response.text)
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "success"

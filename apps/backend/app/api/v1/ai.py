@@ -399,6 +399,7 @@ async def chat_with_pdf_stream(
             document_id=document_id,
             user_id=current_user_id
         )
+        request._input_validation = val_result
         if not val_result.valid:
             yield make_event("input_validation", "failed", f"Input validation rejected: {', '.join(val_result.reasons)}", 100.0)
             return

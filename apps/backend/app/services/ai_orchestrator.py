@@ -30,53 +30,116 @@ class AIOrchestratorService:
             raise
             
         # 2. Input Validation
-        if hasattr(request, "message") and request.message:
-            from app.ai_system.validation.input_validator import validate_input
-            from app.ai_system.validation.schemas import InputAction
-            from app.schemas.ai_schema import ExecutionMode
+        query_text = getattr(request, "message", None)
+        if query_text is None:
+            if hasattr(request, "summary_style"):
+                query_text = "Summarize the document"
+            elif hasattr(request, "difficulty"):
+                query_text = "Generate a quiz from the document"
+            else:
+                query_text = "Process document"
+
+        from app.ai_system.validation.input_validator import validate_input
+        from app.ai_system.validation.schemas import RequestType, ResponseStrategy, DocumentTaskType, TaskType as ValTaskType
+        from app.ai_system.validation.dynamic_response import compose_dynamic_response
+        from app.ai_system.validation.verifier import verify_response
+        from app.schemas.ai_schema import ExecutionMode
+        
+        validation_result = await validate_input(
+            raw_text=query_text,
+            document_id=document_id,
+            user_id=user_id
+        )
+        
+        # Attach validation result to request for downstream retrieval and verifier tasks
+        request._input_validation = validation_result
+        lang = validation_result.language
+        
+        # A. Intercept non-pipeline strategy (greetings, abuse-only, prompt injection)
+        if not validation_result.allow_pipeline:
+            composed_text = compose_dynamic_response(validation_result.response_strategy, lang=lang)
             
-            validation_result = await validate_input(
-                raw_text=request.message,
-                document_id=document_id,
-                user_id=user_id
+            # Deterministic output verifier check
+            verification = await verify_response(
+                user_query=query_text,
+                task_type=ValTaskType.CHAT,
+                retrieved_chunks=[],
+                executor_output=composed_text,
+                response_strategy=validation_result.response_strategy,
+                primary_task=validation_result.primary_task
             )
             
-            if not validation_result.valid:
-                is_injection = any("prompt injection" in r.lower() for r in validation_result.reasons)
-                status_str = "prompt_injection" if is_injection else "invalid_input"
-                
-                trace_stages.append({
-                    "stage": "input_validation",
-                    "status": "failed",
-                    "reasons": validation_result.reasons,
-                    "severity": validation_result.severity.value,
-                    "type": status_str
-                })
-                
-                if validation_result.action == InputAction.REJECT:
-                    from app.ai_system.validation.rules import FALLBACK_MESSAGE
-                    return AIResponse(
-                        status=status_str,
-                        message=FALLBACK_MESSAGE,
-                        execution_mode=ExecutionMode.SINGLE,
-                        tasks=[],
-                        citations=[],
-                        confidence=0.0,
-                        metadata={
-                            "error": ", ".join(validation_result.reasons),
-                            "trace": trace_stages,
-                            "validation_type": status_str
-                        }
-                    )
-            else:
-                trace_stages.append({
-                    "stage": "input_validation",
-                    "status": "passed",
-                    "sanitized": validation_result.sanitized_input
-                })
-                request.message = validation_result.sanitized_input
-        else:
-            trace_stages.append({"stage": "input_validation", "status": "passed"})
+            is_injection = validation_result.request_type == RequestType.prompt_injection
+            is_abuse = validation_result.request_type == RequestType.abuse_only
+            
+            status_str = "prompt_injection" if is_injection else (
+                "invalid_input" if is_abuse else (
+                    "needs_clarification" if validation_result.response_strategy in [
+                        ResponseStrategy.generate_greeting_response,
+                        ResponseStrategy.generate_clarification
+                    ] else "success"
+                )
+            )
+            
+            trace_stages.append({
+                "stage": "input_validation",
+                "status": "intercepted",
+                "strategy": validation_result.response_strategy.value
+            })
+            
+            return AIResponse(
+                status=status_str,
+                message=verification.final_answer or composed_text,
+                execution_mode=ExecutionMode.SINGLE,
+                tasks=[],
+                citations=[],
+                confidence=1.0,
+                metadata={
+                    "trace": trace_stages,
+                    "response_strategy": validation_result.response_strategy.value
+                }
+            )
+            
+        # B. Intercept document metadata query (uses verified database props, 0 LLM calls)
+        if validation_result.primary_task == DocumentTaskType.document_metadata_query:
+            from app.ai_system.validation.metadata_router import resolve_metadata_query
+            metadata_answer = await resolve_metadata_query(document_id, query_text, lang=lang)
+            
+            verification = await verify_response(
+                user_query=query_text,
+                task_type=ValTaskType.CHAT,
+                retrieved_chunks=[],
+                executor_output=metadata_answer,
+                response_strategy=validation_result.response_strategy,
+                primary_task=validation_result.primary_task
+            )
+            
+            trace_stages.append({
+                "stage": "metadata_lookup",
+                "status": "completed"
+            })
+            
+            return AIResponse(
+                status="success",
+                message=verification.final_answer or metadata_answer,
+                execution_mode=ExecutionMode.SINGLE,
+                tasks=[],
+                citations=[],
+                confidence=1.0,
+                metadata={
+                    "trace": trace_stages,
+                    "primary_task": "document_metadata_query"
+                }
+            )
+            
+        # C. Proceed normal pipeline
+        trace_stages.append({
+            "stage": "input_validation",
+            "status": "passed",
+            "sanitized": validation_result.sanitized_input
+        })
+        if hasattr(request, "message"):
+            request.message = validation_result.sanitized_input
         
         # 3. Planner
         try:
@@ -98,7 +161,7 @@ class AIOrchestratorService:
         if response.status in ["success", "partial"]:
             import json
             from app.ai_system.validation.output_validator import validate_output
-            from app.ai_system.validation.schemas import TaskType as ValTaskType, HallucinationCheckResult, HallucinationAction, OutputAction
+            from app.ai_system.validation.schemas import TaskType as ValTaskType, HallucinationCheckResult, HallucinationAction, OutputAction, ResponseStrategy
             
             intent_map = {
                 "chat_answer": ValTaskType.CHAT,
@@ -117,6 +180,9 @@ class AIOrchestratorService:
             all_valid = True
             first_fail_res = None
             
+            strategy_val = getattr(request, "_input_validation", None).response_strategy if getattr(request, "_input_validation", None) else ResponseStrategy.continue_to_planner
+            primary_task_val = getattr(request, "_input_validation", None).primary_task if getattr(request, "_input_validation", None) else None
+
             tasks_to_validate = response.tasks if response.tasks else []
             if not tasks_to_validate:
                 primary_intent = plan.primary_intent.value if plan.primary_intent else "chat_answer"
@@ -139,7 +205,10 @@ class AIOrchestratorService:
                     task_type=val_task_type,
                     output_text=str(output_text),
                     hallucination_result=mock_hallucination,
-                    quiz_data=quiz_data
+                    quiz_data=quiz_data,
+                    response_strategy=strategy_val,
+                    primary_task=primary_task_val,
+                    query=query_text
                 )
                 if not out_val_res.valid:
                     all_valid = False
@@ -168,7 +237,10 @@ class AIOrchestratorService:
                             task_type=val_task_type,
                             output_text=str(output_text),
                             hallucination_result=mock_hallucination,
-                            quiz_data=quiz_data
+                            quiz_data=quiz_data,
+                            response_strategy=strategy_val,
+                            primary_task=primary_task_val,
+                            query=query_text
                         )
                         if not out_val_res.valid:
                             all_valid = False

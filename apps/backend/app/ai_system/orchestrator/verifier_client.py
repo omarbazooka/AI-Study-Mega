@@ -43,7 +43,8 @@ class VerifierClient(ABC):
         llm_output: str,
         output_format: str,
         citations: List[Any],
-        policy: VerificationPolicy
+        policy: VerificationPolicy,
+        **kwargs
     ) -> VerificationResult:
         """
         Verifies LLM response grounding, schema compliance, relevance, and completeness.
@@ -63,12 +64,21 @@ class RealVerifierClient(VerifierClient):
         llm_output: str,
         output_format: str,
         citations: List[Any],
-        policy: VerificationPolicy
+        policy: VerificationPolicy,
+        **kwargs
     ) -> VerificationResult:
         import os
         from app.ai_system.services.llm.config import LLMConfig
         from app.ai_system.validation.verifier import verify_response
-        from app.ai_system.validation.schemas import RetrievedChunk as ValRetrievedChunk, TaskType as ValTaskType
+        from app.ai_system.validation.schemas import (
+            RetrievedChunk as ValRetrievedChunk,
+            TaskType as ValTaskType,
+            ResponseStrategy,
+            DocumentTaskType
+        )
+        
+        response_strategy = kwargs.get("response_strategy", ResponseStrategy.continue_to_planner)
+        primary_task = kwargs.get("primary_task", None)
         
         # Decide if we can run LLM judge based on new 5-key config resolver
         use_llm_judge = True
@@ -123,7 +133,9 @@ class RealVerifierClient(VerifierClient):
             retrieved_chunks=val_chunks,
             executor_output=llm_output,
             quiz_data=quiz_data,
-            use_llm_judge=use_llm_judge
+            use_llm_judge=use_llm_judge,
+            response_strategy=response_strategy,
+            primary_task=primary_task
         )
         
         # Map actions: retrieve_more is degraded to fallback as per architectural constraints
