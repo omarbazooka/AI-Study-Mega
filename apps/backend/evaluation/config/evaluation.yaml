@@ -1,0 +1,73 @@
+# Evaluation System Configuration
+
+paths:
+  document_dir: "evaluation/documents"
+  manifest_path: "evaluation/datasets/document_manifest.json"
+  dataset_jsonl: "evaluation/datasets/golden_dataset.jsonl"
+  dataset_csv: "evaluation/datasets/golden_dataset.csv"
+  dataset_validation_report: "evaluation/datasets/dataset_validation_report.json"
+  raw_outputs: "evaluation/results/raw/pipeline_outputs.jsonl"
+  ragas_results_csv: "evaluation/results/ragas/ragas_case_results.csv"
+  ragas_summary_json: "evaluation/results/ragas/ragas_summary.json"
+  ragas_metadata_json: "evaluation/results/ragas/ragas_run_metadata.json"
+  deepeval_results_csv: "evaluation/results/deepeval/deepeval_case_results.csv"
+  deepeval_summary_json: "evaluation/results/deepeval/deepeval_summary.json"
+  deepeval_metadata_json: "evaluation/results/deepeval/deepeval_run_metadata.json"
+  local_results_json: "evaluation/results/summary/local_metrics.json"
+  charts_dir: "evaluation/reports/charts"
+  report_md: "evaluation/reports/AI_STUDY_PLATFORM_EVALUATION_REPORT.md"
+  report_html: "evaluation/reports/AI_STUDY_PLATFORM_EVALUATION_REPORT.html"
+  report_pdf: "evaluation/reports/AI_STUDY_PLATFORM_EVALUATION_REPORT.pdf"
+
+requirements:
+  expected_document_count: 3
+  test_case_count: 30
+  min_arabic_questions: 8
+  min_english_questions: 8
+  categories:
+    direct_factual: 10
+    explanation: 5
+    multi_chunk: 5
+    comparison: 3
+    summary: 3
+    unanswerable: 4
+
+pipeline:
+  concurrency: 1
+  retries: 2
+  timeout: 60.0
+  random_seed: 42
+
+thresholds:
+  answer_correctness: 0.80
+  faithfulness: 0.85
+  answer_relevancy: 0.80
+  educational_quality: 0.80
+  citation_accuracy: 0.90
+
+composite_weights:
+  ragas_answer_correctness: 0.25
+  ragas_faithfulness: 0.25
+  deepeval_answer_relevancy: 0.15
+  deepeval_educational_quality: 0.15
+  context_precision: 0.10
+  context_recall: 0.10
+
+budget:
+  max_pipeline_cases: 30
+  max_dataset_generation_calls: 35
+  max_ragas_cases: 30
+  max_deepeval_cases: 30
+  deepeval_faithfulness_subset: 10
+  max_retries_per_case: 2
+  concurrency: 1
+  max_judge_context_chars: 12000
+  abort_on_budget_exceeded: true
+
+judge:
+  provider: "groq"
+  model: "llama-3.3-70b-versatile"
+  temperature: 0.0
+
+ablation:
+  enabled: false

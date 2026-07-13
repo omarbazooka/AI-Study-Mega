@@ -22,9 +22,12 @@ const Header = () => {
                 </ul>
             </nav>
 
-            <div className='flex justify-end gap-2 flex-shrink-0'>
-                <Button variant="purple">
-                    <Link href="/auth/signup" className='text-button '>Sign up</Link>
+            <div className='flex justify-end gap-2 flex-shrink-0 items-center'>
+                <Button variant="ghost" asChild>
+                    <Link href="/auth/login" className='text-button text-text-secondary hover:text-text-primary'>Log in</Link>
+                </Button>
+                <Button variant="purple" asChild>
+                    <Link href="/auth/signup" className='text-button'>Sign up</Link>
                 </Button>
             </div>
         </div>

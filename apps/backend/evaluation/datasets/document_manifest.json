@@ -1,0 +1,32 @@
+{
+  "Arabic Document 2.pdf": {
+    "filename": "Arabic Document 2.pdf",
+    "relative_path": "evaluation/documents/Arabic Document 2.pdf",
+    "file_hash": "0c08c0a585e9a1d672dc0226f885de55c521ad0441d3ad57746fdf6292333a2c",
+    "page_count": 12,
+    "language": "ar",
+    "ingestion_timestamp": "2026-07-13T15:44:15.646118+00:00",
+    "document_id": "1ef24635-4f7f-4849-93a7-3a4fc6bf1560",
+    "chunk_count": 47
+  },
+  "Document 3 Advanced.pdf": {
+    "filename": "Document 3 Advanced.pdf",
+    "relative_path": "evaluation/documents/Document 3 Advanced.pdf",
+    "file_hash": "1739e0672142983fd4b931c6625eebda645a0b193937f9fff0e445a083b9c8e3",
+    "page_count": 17,
+    "language": "en",
+    "ingestion_timestamp": "2026-07-13T15:44:50.891997+00:00",
+    "document_id": "6be74837-9a43-44ff-bba2-eebaeeb10823",
+    "chunk_count": 8
+  },
+  "English Document 1.pdf": {
+    "filename": "English Document 1.pdf",
+    "relative_path": "evaluation/documents/English Document 1.pdf",
+    "file_hash": "8cfb265fe2877d0c44522848485fe55334ad041b4f55e0036748058dee47fc67",
+    "page_count": 19,
+    "language": "en",
+    "ingestion_timestamp": "2026-07-13T15:45:14.005636+00:00",
+    "document_id": "0d453a69-e504-48c6-bc6c-09e801756218",
+    "chunk_count": 13
+  }
+}

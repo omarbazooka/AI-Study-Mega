@@ -28,3 +28,9 @@ out/
 # Application logs
 apps/backend/logs/
 *.log
+
+# Evaluation results, cache, and reports
+apps/backend/evaluation/results/
+apps/backend/evaluation/reports/
+apps/backend/evaluation/datasets/golden_dataset.*
+apps/backend/evaluation/datasets/dataset_validation_report.json
