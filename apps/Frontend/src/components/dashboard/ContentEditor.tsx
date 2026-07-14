@@ -18,6 +18,7 @@ import { DragHandle } from '@tiptap/extension-drag-handle-react';
 const DragHandleComponent = DragHandle as any;
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
+import { MathExtension } from '@aarkue/tiptap-math-extension';
 import { Type, Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare, ChevronRight, FilePlus, Quote, Minus, FileText } from 'lucide-react';
 
 const Summary = TiptapNode.create({
@@ -245,6 +246,7 @@ const ContentEditor = ({ activePage, allPages = [], updatePage, onSelectPage, on
       TaskItem.configure({
         nested: true,
       }),
+      MathExtension.configure({ evaluation: false }),
     ],
     content: activePage?.content || '',
     onUpdate: ({ editor }) => {

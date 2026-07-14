@@ -344,6 +344,8 @@ export default function DashboardContent({ user, initialView = "home" }: Dashboa
         onAddPage={addPage}
         onTogglePage={(id) => updatePage(id, { isOpen: !pages.find(p => p.id === id)?.isOpen })}
         onDeletePage={deletePage}
+        user={user}
+        onLogout={handleLogout}
       />
       {activeView === "home" && (
         <DashboardHome
@@ -392,6 +394,7 @@ export default function DashboardContent({ user, initialView = "home" }: Dashboa
         displayName={displayName}
         email={user.email}
       />
+      <Toaster theme="dark" position="bottom-right" />
     </div>
 
   );
