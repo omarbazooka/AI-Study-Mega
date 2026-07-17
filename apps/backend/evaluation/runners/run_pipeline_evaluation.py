@@ -8,9 +8,22 @@ import uuid
 import hashlib
 from typing import List, Dict, Any
 from unittest.mock import patch
+from datetime import datetime, timezone
 
 # Add parent directory to sys.path so we can import app modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+# Reconfigure stdout/stderr to utf-8 to prevent charmap/CP1252 errors on Windows
+if sys.stdout.encoding != 'utf-8':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+os.environ["EVALUATION_RUN"] = "true"
+if sys.stderr.encoding != 'utf-8':
+    try:
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
 
 import yaml
 from app.core.config import settings
@@ -24,6 +37,8 @@ stage_latencies = {
     "planner_end": 0.0,
     "retrieval_start": 0.0,
     "retrieval_end": 0.0,
+    "reranking_start": 0.0,
+    "reranking_end": 0.0,
     "generation_start": 0.0,
     "generation_end": 0.0,
     "verification_start": 0.0,
@@ -47,10 +62,18 @@ def timing_wrap_collector(original_method):
         return res
     return wrapper
 
+def timing_wrap_rerank(original_method):
+    async def wrapper(self, *args, **kwargs):
+        stage_latencies["reranking_start"] = time.perf_counter()
+        res = await original_method(self, *args, **kwargs)
+        stage_latencies["reranking_end"] = time.perf_counter()
+        return res
+    return wrapper
+
 def timing_wrap_generate(original_method):
-    async def wrapper(payload, *args, **kwargs):
+    async def wrapper(self, payload, *args, **kwargs):
         stage_latencies["generation_start"] = time.perf_counter()
-        res = await original_method(payload, *args, **kwargs)
+        res = await original_method(self, payload, *args, **kwargs)
         stage_latencies["generation_end"] = time.perf_counter()
         return res
     return wrapper
@@ -195,6 +218,9 @@ async def run_evaluation():
     print(f"[PIPELINE] Authenticating evaluation user...")
     try:
         user_id, access_token = authenticate_evaluation_user()
+        from app.db.supabase_client import get_supabase_client
+        get_supabase_client().postgrest.auth(access_token)
+        print("[PIPELINE] Global Supabase client authenticated via user JWT.")
     except Exception as e:
         print(f"[PIPELINE] ERROR: Authentication failed: {e}")
         sys.exit(1)
@@ -205,17 +231,20 @@ async def run_evaluation():
     # Timing Wrappers setup
     from app.ai_system.orchestrator.planner import TaskPlanner
     from app.ai_system.validation.context_collector import collect_context
-    from app.ai_system.services.llm.generate import generate as original_generate
     from app.ai_system.validation.verifier import verify_response
+    from app.ai_system.services.llm.generation_service import GenerationService
+    from app.ai_system.retrieval.reranker import MultilingualRerankerRouter
     
     TaskPlanner.plan = timing_wrap_planner(TaskPlanner.plan)
     # Note: collect_context is imported directly in pipeline_registry, but we patch it globally
     import app.ai_system.validation.context_collector
     app.ai_system.validation.context_collector.collect_context = timing_wrap_collector(app.ai_system.validation.context_collector.collect_context)
-    import app.ai_system.services.llm.generate
-    app.ai_system.services.llm.generate.generate = timing_wrap_generate
+    
+    GenerationService.execute_task = timing_wrap_generate(GenerationService.execute_task)
+    MultilingualRerankerRouter.rerank_async = timing_wrap_rerank(MultilingualRerankerRouter.rerank_async)
+    
     import app.ai_system.validation.verifier
-    app.ai_system.validation.verifier.verify_response = timing_wrap_verify
+    app.ai_system.validation.verifier.verify_response = timing_wrap_verify(app.ai_system.validation.verifier.verify_response)
     
     # Execution Loop
     print(f"\n[PIPELINE] Starting execution of {len(run_cases)} cases...")
@@ -278,14 +307,18 @@ async def run_evaluation():
         
         # Construct stage latencies
         def get_diff_ms(start_k, end_k):
-            if stage_latencies[start_k] > 0 and stage_latencies[end_k] > 0:
+            if stage_latencies.get(start_k, 0.0) > 0 and stage_latencies.get(end_k, 0.0) > 0:
                 return int((stage_latencies[end_k] - stage_latencies[start_k]) * 1000)
-            return 0
+            return None
             
         planner_lat = get_diff_ms("planner_start", "planner_end")
         ret_lat = get_diff_ms("retrieval_start", "retrieval_end")
+        rerank_lat = get_diff_ms("reranking_start", "reranking_end")
         gen_lat = get_diff_ms("generation_start", "generation_end")
         ver_lat = get_diff_ms("verification_start", "verification_end")
+        
+        stages_sum = sum(val for val in [planner_lat, ret_lat, rerank_lat, gen_lat, ver_lat] if val is not None)
+        unattributed_lat = max(0, total_latency - stages_sum)
         
         # Retrieve context text and chunk ids
         retrieved_contexts = []
@@ -301,6 +334,9 @@ async def run_evaluation():
             actual_answer = response.message
             final_confidence = response.confidence
             exec_mode = response.execution_mode.value if hasattr(response.execution_mode, "value") else str(response.execution_mode)
+            retrieval_scores = []
+            reranker_scores = []
+
             
             # Extract citations and contexts
             if response.citations:
@@ -314,11 +350,17 @@ async def run_evaluation():
                 res_obj = state.retrieval_result
                 if hasattr(res_obj, "chunks") and res_obj.chunks:
                     for chunk in res_obj.chunks:
-                        retrieved_contexts.append(chunk.content)
+                        retrieved_contexts.append(chunk.text)
                         if chunk.chunk_id not in retrieved_chunk_ids:
                             retrieved_chunk_ids.append(chunk.chunk_id)
                         if chunk.page_number and chunk.page_number not in retrieved_page_numbers:
                             retrieved_page_numbers.append(chunk.page_number)
+                        # Capture actual retrieval scores from chunks
+                        chunk_meta = chunk.metadata if hasattr(chunk, "metadata") and chunk.metadata else {}
+                        retrieval_scores.append(round(float(chunk.score or 0.0), 6))
+                        provider_score = chunk_meta.get("provider_relevance_score")
+                        if provider_score is not None:
+                            reranker_scores.append(round(float(provider_score), 6))
                             
             # Fetch verifier trace details
             if state and state.trace_stages:
@@ -331,6 +373,14 @@ async def run_evaluation():
             actual_answer = settings.GROQ_FIRST_FALLBACK_MODEL
             verifier_status = "failed"
             verifier_action = "none"
+            retrieval_scores = []
+            reranker_scores = []
+
+        # Extract rerank details from state if present
+        rerank_details = None
+        state = getattr(request, "_pipeline_state", None)
+        if state and state.retrieval_result and hasattr(state.retrieval_result, "trace"):
+            rerank_details = getattr(state.retrieval_result.trace, "rerank_details", None)
             
         # Format output
         output_record = {
@@ -338,11 +388,12 @@ async def run_evaluation():
             "test_case_id": case_id,
             "question": q,
             "actual_answer": actual_answer,
+            "rerank_details": rerank_details,
             "retrieved_contexts": retrieved_contexts,
             "retrieved_chunk_ids": retrieved_chunk_ids,
             "retrieved_page_numbers": retrieved_page_numbers,
-            "retrieval_scores": [],
-            "reranker_scores": [],
+            "retrieval_scores": retrieval_scores,
+            "reranker_scores": reranker_scores,
             "citations": [c.model_dump() if hasattr(c, "model_dump") else c for c in (response.citations if response else [])],
             "planner_intent": planner_intent,
             "execution_mode": exec_mode,
@@ -354,10 +405,11 @@ async def run_evaluation():
             "fallback_models_used": [],
             "prompt_version": "v1.0",
             "retrieval_latency_ms": ret_lat,
-            "reranking_latency_ms": 0, # Included in retrieval_latency_ms in pipeline
+            "reranking_latency_ms": rerank_lat,
             "planning_latency_ms": planner_lat,
             "generation_latency_ms": gen_lat,
             "verification_latency_ms": ver_lat,
+            "unattributed_latency_ms": unattributed_lat,
             "total_latency_ms": total_latency,
             "input_tokens": None,
             "output_tokens": None,
@@ -374,7 +426,7 @@ async def run_evaluation():
         completed_count += 1
         
         # Concurrency/Rate limit manager sleep
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(12.0)
         
     print(f"\n[PIPELINE] Finished run! Completed {completed_count} cases. Outputs appended to: {raw_outputs_path}")
 

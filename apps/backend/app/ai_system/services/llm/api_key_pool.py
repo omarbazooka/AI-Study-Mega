@@ -128,25 +128,38 @@ class APIKeyPool:
     def get_available_key(self, group: str) -> APIKey:
         """
         Retrieves the next available key for the given group.
-        If all keys are cooled down/disabled, raises AllKeysExhaustedException.
+        If all keys in the group are exhausted, borrows an available key from another group.
+        If absolutely all keys are exhausted, raises AllKeysExhaustedException.
         """
         group = group.upper()
         with self._lock:
             from .exceptions import AllKeysExhaustedException
-            if group not in self._keys or not self._keys[group]:
-                raise AllKeysExhaustedException(group)
+            
+            # 1. Try to get key from target group
+            if group in self._keys and self._keys[group]:
+                keys = self._keys[group]
+                num_keys = len(keys)
+                start_index = self._current_index.get(group, 0)
 
-            keys = self._keys[group]
-            num_keys = len(keys)
-            start_index = self._current_index.get(group, 0)
+                for i in range(num_keys):
+                    candidate_idx = (start_index + i) % num_keys
+                    key = keys[candidate_idx]
+                    if key.is_available():
+                        self._current_index[group] = (candidate_idx + 1) % num_keys
+                        key.usage_count += 1
+                        return key
 
-            for i in range(num_keys):
-                candidate_idx = (start_index + i) % num_keys
-                key = keys[candidate_idx]
-                if key.is_available():
-                    self._current_index[group] = (candidate_idx + 1) % num_keys
-                    key.usage_count += 1
-                    return key
+            # 2. Try to borrow from other groups if allowed by feature flag
+            import os
+            allow_borrow = os.getenv("LLM_ALLOW_CROSS_GROUP_KEY_BORROWING", "false").lower() in ("true", "1")
+            if allow_borrow:
+                for other_group, keys in self._keys.items():
+                    if other_group != group:
+                        for key in keys:
+                            if key.is_available():
+                                logger.info(f"Key group '{group}' exhausted. Borrowing available key from group '{other_group}'.")
+                                key.usage_count += 1
+                                return key
 
             raise AllKeysExhaustedException(group)
 

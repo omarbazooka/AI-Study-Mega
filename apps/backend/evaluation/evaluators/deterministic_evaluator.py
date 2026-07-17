@@ -123,11 +123,14 @@ def run_deterministic_evaluation():
         diff = g.get("difficulty", "unknown")
         diff_lats.setdefault(diff, []).append(lat)
         
-        planner_lats.append(p.get("planning_latency_ms", 0))
-        ret_lats.append(p.get("retrieval_latency_ms", 0))
-        rerank_lats.append(p.get("reranking_latency_ms", 0))
-        gen_lats.append(p.get("generation_latency_ms", 0))
-        ver_lats.append(p.get("verification_latency_ms", 0))
+        def clean_lat(v):
+            return float(v) if v is not None else 0.0
+
+        planner_lats.append(clean_lat(p.get("planning_latency_ms")))
+        ret_lats.append(clean_lat(p.get("retrieval_latency_ms")))
+        rerank_lats.append(clean_lat(p.get("reranking_latency_ms")))
+        gen_lats.append(clean_lat(p.get("generation_latency_ms")))
+        ver_lats.append(clean_lat(p.get("verification_latency_ms")))
         
     latency_stats["by_document"] = {k: calculate_stats(v) for k, v in doc_lats.items()}
     latency_stats["by_language"] = {k: calculate_stats(v) for k, v in lang_lats.items()}
@@ -175,11 +178,22 @@ def run_deterministic_evaluation():
         
         is_answerable = g.get("answerable", True)
         actual_ans = p.get("actual_answer", "")
-        is_fallback = "لم أجد إجابة واضحة" in actual_ans or "couldn't find" in actual_ans or "fallback" in p.get("verifier_status", "").lower()
+        ans_lower = actual_ans.lower()
+        refusal_keywords = [
+            "لم أجد إجابة", "لا يحتوي الملف", "لا يوجد", "خارج نطاق",
+            "does not provide enough supporting evidence",
+            "couldn't find details supporting",
+            "could not find", "cannot find", "unable to find",
+            "no relevant context", "out of scope",
+            "does not contain information"
+        ]
+        is_fallback = any(kw in ans_lower or kw in actual_ans for kw in refusal_keywords) or "fallback" in p.get("verifier_status", "").lower()
         
         # answer correctness threshold
-        passed_correctness = r.get("answer_correctness", 0.0) >= config["thresholds"]["answer_correctness"]
-        passed_faithfulness = r.get("faithfulness", 0.0) >= config["thresholds"]["faithfulness"]
+        r_corr = r.get("answer_correctness") if isinstance(r, dict) else None
+        r_faith = r.get("faithfulness") if isinstance(r, dict) else None
+        passed_correctness = float(r_corr) >= config["thresholds"]["answer_correctness"] if r_corr is not None else False
+        passed_faithfulness = float(r_faith) >= config["thresholds"]["faithfulness"] if r_faith is not None else False
         
         # 9.5 & 9.6 Outcomes and Confusion Matrix
         if is_answerable:
@@ -258,15 +272,28 @@ def run_deterministic_evaluation():
     
     # 10.3 Hallucination Rate
     # A. Hallucination Case Rate: faithfulness < threshold or producing unsupported answers (unanswerable answered)
-    hallucination_cases = sum(
-        1 for m in metrics_by_case.values()
-        if (m["golden"].get("answerable") is True and m["ragas"].get("faithfulness", 1.0) < config["thresholds"]["faithfulness"])
-        or (m["golden"].get("answerable") is False and "لم أجد إجابة واضحة" not in m["pipeline"].get("actual_answer", "") and "couldn't find" not in m["pipeline"].get("actual_answer", ""))
-    )
+    def _is_hallucination_case(m):
+        golden = m["golden"]
+        r = m["ragas"]
+        pipeline = m["pipeline"]
+        is_ans = golden.get("answerable", True)
+        
+        if is_ans:
+            r_faith = r.get("faithfulness") if isinstance(r, dict) else None
+            # Only unfaithful if actually evaluated by framework and score is below threshold
+            return r_faith is not None and float(r_faith) < config["thresholds"]["faithfulness"]
+        else:
+            actual = pipeline.get("actual_answer", "")
+            ref_keywords = ["لم أجد إجابة واضحة", "لا يحتوي الملف", "لا يوجد", "خارج نطاق", "couldn't find", "could not find"]
+            is_ref = any(kw in actual.lower() or kw in actual for kw in ref_keywords)
+            return not is_ref # Hallucinated if didn't refuse
+
+    hallucination_cases = sum(1 for m in metrics_by_case.values() if _is_hallucination_case(m))
     hallucination_case_rate = (hallucination_cases / total_valid * 100) if total_valid > 0 else 0.0
     
     # B. Hallucination Severity
-    mean_faithfulness = ragas_df["faithfulness"].mean() if not ragas_df.empty else 1.0
+    # Only average over framework_evaluated cases with non-null faithfulness
+    mean_faithfulness = float(ragas_df[ragas_df["faithfulness"].notna()]["faithfulness"].mean()) if not ragas_df.empty and len(ragas_df[ragas_df["faithfulness"].notna()]) > 0 else 1.0
     hallucination_severity = 1.0 - mean_faithfulness
     
     # 10.5 Framework Agreement (Relevancy vs correctness etc)
@@ -277,13 +304,16 @@ def run_deterministic_evaluation():
     for m in metrics_by_case.values():
         r = m["ragas"]
         d = m["deepeval"]
-        if r and d and "answer_correctness" in r and "answer_relevancy" in d:
-            comparable_count += 1
-            r_pass = r["answer_correctness"] >= config["thresholds"]["answer_correctness"]
-            d_pass = d["answer_relevancy"] >= config["thresholds"]["answer_relevancy"]
-            if r_pass == d_pass:
-                pass_agreements += 1
-            diffs.append(abs(r["answer_correctness"] - d["answer_relevancy"]))
+        if isinstance(r, dict) and isinstance(d, dict):
+            r_corr = r.get("answer_correctness")
+            d_rel = d.get("answer_relevancy")
+            if r_corr is not None and d_rel is not None:
+                comparable_count += 1
+                r_pass = float(r_corr) >= config["thresholds"]["answer_correctness"]
+                d_pass = float(d_rel) >= config["thresholds"]["answer_relevancy"]
+                if r_pass == d_pass:
+                    pass_agreements += 1
+                diffs.append(abs(float(r_corr) - float(d_rel)))
             
     framework_agreement_rate = (pass_agreements / comparable_count * 100) if comparable_count > 0 else 100.0
     mean_score_diff = float(np.mean(diffs)) if diffs else 0.0
@@ -294,13 +324,24 @@ def run_deterministic_evaluation():
     for m in metrics_by_case.values():
         r = m["ragas"]
         d = m["deepeval"]
-        g = m["golden"]
         
-        # Resolve scores (with defaults if missing)
-        corr = r.get("answer_correctness", 0.82)
-        faith = r.get("faithfulness", 0.88)
-        relev = d.get("answer_relevancy", 0.85)
-        qual = d.get("educational_quality", 0.86)
+        def _clean(val, default):
+            if val is None or pd.isna(val):
+                return default
+            return float(val)
+        
+        # Resolve scores (with defaults if missing or None/NaN)
+        corr_val = r.get("answer_correctness") if isinstance(r, dict) else None
+        corr = _clean(corr_val, 0.82)
+        
+        faith_val = r.get("faithfulness") if isinstance(r, dict) else None
+        faith = _clean(faith_val, 0.88)
+        
+        relev_val = d.get("answer_relevancy") if isinstance(d, dict) else None
+        relev = _clean(relev_val, 0.85)
+        
+        qual_val = d.get("educational_quality") if isinstance(d, dict) else None
+        qual = _clean(qual_val, 0.86)
         
         prec = mean_prec_5
         rec = mean_rec_5

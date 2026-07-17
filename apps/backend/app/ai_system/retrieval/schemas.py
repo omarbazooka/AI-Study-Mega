@@ -88,6 +88,7 @@ class RetrievalTrace(BaseModel):
     context_build_latency_ms: int = 0
     total_retrieval_latency_ms: int = 0
     expanded: bool = False
+    rerank_details: Optional[Dict[str, Any]] = None
 
 
 class RetrievalResult(BaseModel):

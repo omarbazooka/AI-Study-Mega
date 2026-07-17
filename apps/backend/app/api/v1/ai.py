@@ -403,7 +403,27 @@ async def chat_with_pdf_stream(
         if not val_result.valid:
             yield make_event("input_validation", "failed", f"Input validation rejected: {', '.join(val_result.reasons)}", 100.0)
             return
-            
+
+        # Early-return for non-pipeline paths (e.g. greetings, clarifications, boundaries).
+        # These must NEVER reach planner, retrieval, LLM, or verifier.
+        if not val_result.allow_pipeline:
+            from app.ai_system.validation.dynamic_response import compose_dynamic_response
+            from app.ai_system.validation.schemas import ResponseStrategy
+            import logging as _logging
+            _logging.getLogger(__name__).info(
+                f"[FALLBACK_REASON: greeting_early_response] "
+                f"strategy={val_result.response_strategy} query={request.message!r}"
+            )
+            lang = getattr(request, "language", "ar") or "ar"
+            early_content = compose_dynamic_response(val_result.response_strategy, lang=lang)
+            yield make_event(
+                "completed", "completed",
+                "Query handled without document retrieval.",
+                100.0,
+                data={"content": early_content, "citations": []}
+            )
+            return
+
         yield make_event("input_validation", "completed", "Input validated successfully.", 15.0)
         
         # Stage 2: Planning

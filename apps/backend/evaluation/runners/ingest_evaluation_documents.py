@@ -141,7 +141,8 @@ async def ingest_documents():
             "language": language,
             "ingestion_timestamp": datetime.now(timezone.utc).isoformat(),
             "document_id": doc_id,
-            "chunk_count": chunk_count
+            "chunk_count": chunk_count,
+            "evaluation_user_id": user_id
         }
         
     # Write manifest

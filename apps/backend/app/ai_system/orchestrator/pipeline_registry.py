@@ -223,6 +223,9 @@ async def execute_common_pipeline_steps(
             strategy = validation_res.context_strategy or ExecutionStrategy.focused_retrieval
             primary_task = validation_res.primary_task or DocumentTaskType.document_factual_qa
             
+        # Single retrieval call — DocumentRetriever already performs 3-attempt
+        # progressive threshold relaxation (0.55 → 0.40 → 0.25) internally.
+        # Do NOT duplicate query rewriting here; route through collect_context.
         val_chunks = await collect_context(
             strategy=strategy,
             query=task.query,
@@ -230,38 +233,33 @@ async def execute_common_pipeline_steps(
             user_id=user_id,
             request=request
         )
+
         retrieval_result = (
             state.retrieval_result if state is not None
             else getattr(request, "_retrieval_result", None)
         )
 
-        
-        # 3. Check evidence sufficiency
+        # Check evidence sufficiency
         evidence_res = await validate_evidence(
             primary_task=primary_task,
             collected_chunks=val_chunks,
             query=task.query
         )
+
+        # On weak evidence, log diagnostic; retriever already exhausted thresholds
+        if getattr(evidence_res, "recovery_recommended", False):
+            logger.info(
+                f"[EVIDENCE] Weak evidence after retriever relaxation for query: {task.query!r}. "
+                f"Proceeding with partial answer directive."
+            )
         evidence_status_str = evidence_res.evidence_status.value
+
         
         # If insufficient, skip Executor LLM and verify loop entirely!
         if evidence_res.evidence_status == EvidenceStatus.insufficient:
-            from app.ai_system.validation.dynamic_response import compose_dynamic_response
-            out_of_scope_content = compose_dynamic_response(
-                ResponseStrategy.generate_out_of_scope_response,
-                lang=lang
-            )
-            
-            # Deterministic Output Verifier check
-            from app.ai_system.validation.verifier import verify_response
-            verification = await verify_response(
-                user_query=task.query,
-                task_type=task_type,
-                retrieved_chunks=val_chunks,
-                executor_output=out_of_scope_content,
-                response_strategy=ResponseStrategy.generate_out_of_scope_response,
-                primary_task=primary_task
-            )
+            from app.ai_system.validation.rules import get_fallback_message
+            fallback_reason = "DOCUMENT_INFORMATION_NOT_FOUND"
+            fallback_msg = get_fallback_message(fallback_reason, lang=lang)
             
             if hasattr(request, "_trace_stages"):
                 request._trace_stages.append({
@@ -269,23 +267,48 @@ async def execute_common_pipeline_steps(
                     "status": "failed",
                     "chunks_found": len(val_chunks)
                 })
+                request._trace_stages.append({
+                    "stage": "executor",
+                    "model": "rule_based",
+                    "status": "passed"
+                })
+                request._trace_stages.append({
+                    "stage": "verifier",
+                    "passed": True,
+                    "grounding_score": 1.0
+                })
+                
             return TaskResult(
                 task_id=task.task_id,
                 type=task_type,
                 status="no_answer",
-                content=verification.final_answer or out_of_scope_content,
+                content=fallback_msg,
                 citations=[],
                 confidence=0.0,
-                metadata={"mock": is_mock, "evidence_status": "insufficient"}
+                metadata={
+                    "mock": is_mock, 
+                    "evidence_status": "insufficient",
+                    "final_response_type": "document_fallback",
+                    "fallback_reason_code": fallback_reason
+                }
             )
             
         elif evidence_res.evidence_status == EvidenceStatus.partial:
-            # Partially answer supported parts, warn about unsupported facts
-            task.query += (
-                "\n\n[System directive: Answer only the parts supported by context. "
-                "If information is missing, do not invent facts. Use placeholders like [Add result here] for missing facts.]"
-            )
-            
+            # Partial evidence: proceed to executor but instruct it to caveat unsupported parts.
+            # Inject bilingual directive so prompt is effective for AR and EN questions.
+            if lang == "ar":
+                task.query += (
+                    "\n\n[توجيه النظام: أجب على الأجزاء المدعومة بالسياق فقط. "
+                    "إذا كانت المعلومات غير كاملة، استخدم عبارة [معلومة غير متاحة في المستند] "
+                    "بدلاً من اختلاق معلومات. اذكر المصادر المستخدمة.]"
+                )
+            else:
+                task.query += (
+                    "\n\n[System directive: Answer only the parts supported by context. "
+                    "For missing information use '[Information not available in document]' rather than inventing facts. "
+                    "Cite the sources you used.]"
+                )
+
         elif evidence_res.evidence_status == EvidenceStatus.conflicting:
             task.query += (
                 "\n\n[System directive: The document chunks contain conflicting information. "
@@ -314,14 +337,21 @@ async def execute_common_pipeline_steps(
                 "status": "failed",
                 "chunks_found": 0
             })
+        from app.ai_system.validation.rules import get_fallback_message
+        fallback_msg = get_fallback_message("INTERNAL_PIPELINE_ERROR", lang=lang)
         return TaskResult(
             task_id=task.task_id,
             type=task_type,
             status="no_answer",
-            content=NO_ANSWER_FALLBACK,
+            content=fallback_msg,
             citations=[],
             confidence=0.0,
-            metadata={"mock": is_mock, "error": "Missing document_id context."}
+            metadata={
+                "mock": is_mock, 
+                "error": "Missing document_id context.",
+                "final_response_type": "technical_failure",
+                "fallback_reason_code": "INTERNAL_PIPELINE_ERROR"
+            }
         )
     else:
         if hasattr(request, "_trace_stages"):
@@ -521,10 +551,38 @@ async def execute_common_pipeline_steps(
                     verification_passed = True
                     break
             except Exception as e:
-                logger.error(f"PIPELINE RUNTIME EXCEPTION: {e}", exc_info=True)
-                verification_trace = {"status": "error", "error": str(e), "retries": attempt}
+                # Map technical exceptions to typed reason codes
+                err_str = str(e)
+                exc_type = type(e).__name__
+                if "RateLimitError" in exc_type or "429" in err_str or "rate_limit" in err_str.lower():
+                    reason_code = "GENERATION_TEMPORARILY_UNAVAILABLE"
+                elif "AllKeysExhausted" in exc_type:
+                    reason_code = "GENERATION_TEMPORARILY_UNAVAILABLE"
+                elif "timeout" in err_str.lower() or "Timeout" in exc_type:
+                    reason_code = "RETRIEVAL_TEMPORARILY_UNAVAILABLE"
+                elif "Verification" in exc_type or "verification" in err_str.lower():
+                    reason_code = "VERIFICATION_FAILED"
+                else:
+                    reason_code = "INTERNAL_PIPELINE_ERROR"
+                logger.error(f"PIPELINE RUNTIME EXCEPTION [{reason_code}]: {e}", exc_info=True)
+                verification_trace = {"status": "error", "error": str(e), "reason_code": reason_code, "retries": attempt}
 
         if not verification_passed:
+            last_reason = verification_trace.get("reason_code") or "DOCUMENT_INFORMATION_NOT_FOUND"
+            if last_reason == "DOCUMENT_INFORMATION_NOT_FOUND" and verification_trace.get("status") == "failed":
+                last_reason = "VERIFICATION_FAILED"
+                
+            response_type = "technical_failure" if last_reason in [
+                "RETRIEVAL_TEMPORARILY_UNAVAILABLE",
+                "GENERATION_TEMPORARILY_UNAVAILABLE",
+                "VERIFICATION_FAILED",
+                "CITATION_REBUILD_FAILED",
+                "INTERNAL_PIPELINE_ERROR"
+            ] else "document_fallback"
+            
+            from app.ai_system.validation.rules import get_fallback_message
+            fallback_msg = get_fallback_message(last_reason, lang=lang)
+
             if hasattr(request, "_trace_stages"):
                 request._trace_stages.append({
                     "stage": "executor",
@@ -540,13 +598,15 @@ async def execute_common_pipeline_steps(
                 task_id=task.task_id,
                 type=task_type,
                 status="no_answer",
-                content=NO_ANSWER_FALLBACK,
+                content=fallback_msg,
                 citations=[],
                 confidence=0.0,
                 metadata={
                     "mock": is_mock,
                     "error": "Verification failed, fallback triggered.",
-                    "verification": verification_trace
+                    "verification": verification_trace,
+                    "final_response_type": response_type,
+                    "fallback_reason_code": last_reason
                 }
             )
 

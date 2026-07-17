@@ -20,23 +20,27 @@ def test_api_key_availability():
     assert key.is_available() is True
 
 def test_key_pool_exhaustion():
-    pool = APIKeyPool()
+    import os
+    from unittest.mock import patch
     
-    # Override keys in pool manually for testing
-    pool._keys["FAST"] = [
-        APIKey(value="key1", alias="FAST_1", pool=pool),
-        APIKey(value="key2", alias="FAST_2", pool=pool)
-    ]
+    with patch.dict(os.environ, {"LLM_ALLOW_CROSS_GROUP_KEY_BORROWING": "false"}):
+        pool = APIKeyPool()
+        
+        # Override keys in pool manually for testing
+        pool._keys["FAST"] = [
+            APIKey(value="key1", alias="FAST_1", pool=pool),
+            APIKey(value="key2", alias="FAST_2", pool=pool)
+        ]
 
-    key_1 = pool.get_available_key("FAST")
-    assert key_1.value == "key1"
+        key_1 = pool.get_available_key("FAST")
+        assert key_1.value == "key1"
 
-    # Put both keys on cooldown
-    pool.report_rate_limit(pool._keys["FAST"][0], cooldown_seconds=60)
-    pool.report_rate_limit(pool._keys["FAST"][1], cooldown_seconds=60)
+        # Put both keys on cooldown
+        pool.report_rate_limit(pool._keys["FAST"][0], cooldown_seconds=60)
+        pool.report_rate_limit(pool._keys["FAST"][1], cooldown_seconds=60)
 
-    with pytest.raises(AllKeysExhaustedException):
-        pool.get_available_key("FAST")
+        with pytest.raises(AllKeysExhaustedException):
+            pool.get_available_key("FAST")
 
 def test_key_pool_round_robin_rotation():
     pool = APIKeyPool()

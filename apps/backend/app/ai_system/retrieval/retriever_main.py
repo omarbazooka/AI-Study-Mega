@@ -95,6 +95,7 @@ class DocumentRetriever:
                 ), start)
 
             if self.config.enable_reranker:
+                pre_rerank_info = [{"chunk_id": c.chunk_id, "score": float(c.score)} for c in candidates]
                 if hasattr(self.reranker, "rerank_async"):
                     reranked = await self.reranker.rerank_async(
                         chunks=candidates,
@@ -112,6 +113,28 @@ class DocumentRetriever:
                     )
                 candidates = reranked.chunks
                 trace.rerank_latency_ms = reranked.latency_ms
+                
+                post_rerank_info = [{"chunk_id": c.chunk_id, "score": float(c.score)} for c in candidates]
+                provider_name = "unknown"
+                provider_raw_scores = []
+                normalized_scores = []
+                if candidates:
+                    first_meta = getattr(candidates[0], "metadata", {}) or {}
+                    provider_name = first_meta.get("active_reranker_provider", "unknown")
+                    for c in candidates:
+                        meta = getattr(c, "metadata", {}) or {}
+                        provider_raw_scores.append(float(meta.get("provider_relevance_score", c.score)))
+                        normalized_scores.append(float(c.score))
+                
+                trace.rerank_details = {
+                    "pre_rerank_chunks": pre_rerank_info,
+                    "post_rerank_chunks": post_rerank_info,
+                    "provider_name": provider_name,
+                    "provider_raw_scores": provider_raw_scores,
+                    "normalized_scores": normalized_scores,
+                    "provider_latency": reranked.latency_ms,
+                    "provider_errors": getattr(reranked, "errors", None) or ""
+                }
             else:
                 candidates = candidates[:top_k]
 

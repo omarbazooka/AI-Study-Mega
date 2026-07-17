@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional, List, Any
 import json
+import re
 import logging
 from pydantic import BaseModel
 from app.schemas.ai_schema import VerificationPolicy
@@ -126,6 +127,15 @@ class RealVerifierClient(VerifierClient):
             except Exception:
                 pass
                 
+        # Import and wrap embedding client for Layer 2 similarity verification
+        from app.ai_system.providers.embedding_client import get_embedding_client
+        class HallucinationEmbeddingAdapter:
+            def __init__(self, client):
+                self.client = client
+            def embed(self, text: str) -> list:
+                return self.client.embed_texts([text])[0]
+        wrapped_embedding_client = HallucinationEmbeddingAdapter(get_embedding_client())
+
         # Invoke validation package verifier
         val_res = await verify_response(
             user_query=user_query,
@@ -135,7 +145,8 @@ class RealVerifierClient(VerifierClient):
             quiz_data=quiz_data,
             use_llm_judge=use_llm_judge,
             response_strategy=response_strategy,
-            primary_task=primary_task
+            primary_task=primary_task,
+            embedding_client=wrapped_embedding_client
         )
         
         # Map actions: retrieve_more is degraded to fallback as per architectural constraints
@@ -152,7 +163,13 @@ class RealVerifierClient(VerifierClient):
             if any("format" in r.lower() or "json" in r.lower() or "quiz" in r.lower() for r in val_res.reasons):
                 format_valid = False
                 
-        fallback_msg = "لم أجد إجابة واضحة في الملف المرفوع."
+        # Detect query language
+        lang = "ar"
+        if re.search(r"[a-zA-Z]", user_query):
+            lang = "en"
+            
+        from app.ai_system.validation.rules import get_fallback_message
+        fallback_msg = get_fallback_message("DOCUMENT_INFORMATION_NOT_FOUND", lang=lang)
         final_ans = val_res.final_answer or llm_output
         if action_str == "fallback":
             final_ans = fallback_msg

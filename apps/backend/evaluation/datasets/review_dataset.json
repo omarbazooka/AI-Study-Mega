@@ -1,0 +1,945 @@
+[
+  {
+    "test_case_id": "TC-001",
+    "document_id": "1ef24635-4f7f-4849-93a7-3a4fc6bf1560",
+    "document_filename": "Arabic Document 2.pdf",
+    "document_hash": "0c08c0a585e9a1d672dc0226f885de55c521ad0441d3ad57746fdf6292333a2c",
+    "question": "ما هي أنواع الفعالية المذكورة في النص؟",
+    "language": "ar",
+    "category": "direct_factual",
+    "difficulty": "easy",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "الفعالية التعليمية، الفعالية التنظيمية، والفعالية الإنتاجية.",
+    "required_facts": [
+      "الفعالية التعليمية",
+      "الفعالية التنظيمية",
+      "الفعالية الإنتاجية"
+    ],
+    "reference_contexts": [
+      "ييت بفعاليتهيييا التعليميييية والتنظيميييية\nواإلنتاجيية وننشيب\nبالتيالي مؤسسيات ومنظميات تتعاميل ميط يذ التقنيية بضيي\n. تنتجها وتعلمها وتتدصها\n4.\nال يكفيي أن ت صيص أي دولية صربيية متيالب واصتميادات ماليية ي مة لشيرا\nالمعيدات واكجهيز والترمجييات دون تركييز صلي التني\nالتضتيية اال تكا يية\n. الم لوبة لتنمية ذ التقنية"
+    ],
+    "reference_page_numbers": [
+      10
+    ],
+    "reference_chunk_ids": [
+      "432d866e-d0c8-4065-9132-e3310c466f4a"
+    ],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:14:01.327330+00:00",
+    "source_language": "ar",
+    "question_language": "ar"
+  },
+  {
+    "test_case_id": "TC-002",
+    "document_id": "1ef24635-4f7f-4849-93a7-3a4fc6bf1560",
+    "document_filename": "Arabic Document 2.pdf",
+    "document_hash": "0c08c0a585e9a1d672dc0226f885de55c521ad0441d3ad57746fdf6292333a2c",
+    "question": "ما هو المجال الذي يذكر النص أنه يواجه صعوبات ومعوقات تعيق استفادته؟",
+    "language": "ar",
+    "category": "direct_factual",
+    "difficulty": "medium",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "النص يذكر أن الصعوبات والمعوقات تواجه المجال التعليمي، أي التعليم.",
+    "required_facts": [
+      "الصعوبات والمعوقات التي تواجه الو ط التعليمي",
+      "تعيق استفادة التعليم"
+    ],
+    "reference_contexts": [
+      "يييا\nالمعلوميات واالتصياالت فيي ال يدمات التعليميية ، وأخييراً الكشيف صين نقياو القيو\nوالضعف في معال التنيية التضتيية لتكنولوجييا المعلوميات واالتصياالت فيي التليدان\nالناميية لتضدييد ميدى جا زيتهيا وإسيهامها\nفيي خدمية غضيايا اليتعل إ يافة\nلتو يي\nالصعوبات والمعوغات التي تواجه الو ط التعليميي اليرا ن\nوت ضيول دون اسيتفادته\nميين مع يييات مصيياد تكنولوجيييا المعلومييات واالتصيياالت مييط اغتييرا الضلييول\n.المناستة"
+    ],
+    "reference_page_numbers": [
+      2
+    ],
+    "reference_chunk_ids": [
+      "89d9a844-6fcd-4442-a950-057e775c1873"
+    ],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:14:05.173966+00:00",
+    "source_language": "ar",
+    "question_language": "ar"
+  },
+  {
+    "test_case_id": "TC-003",
+    "document_id": "1ef24635-4f7f-4849-93a7-3a4fc6bf1560",
+    "document_filename": "Arabic Document 2.pdf",
+    "document_hash": "0c08c0a585e9a1d672dc0226f885de55c521ad0441d3ad57746fdf6292333a2c",
+    "question": "ما هما المصطلحان التقنيان المذكوران في النص كأمثلة على التقنيات الحديثة المستخدمة في التعليم؟",
+    "language": "ar",
+    "category": "direct_factual",
+    "difficulty": "hard",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "المصطلحان المذكوران هما \"Data Base System\" و\"Artificial intelligence\".",
+    "required_facts": [
+      "ذكر مصطلح Data Base System في النص",
+      "ذكر مصطلح Artificial intelligence في النص"
+    ],
+    "reference_contexts": [
+      "اكمر الذي حيدا بيالتربويين إلي تتنيي أنمياو وبيدائل تعليميية مت يو ، وتيوفير\nبيئة تفاصلية وحيويية صلي د جية صاليية مين المرونية والكفيا\n؛\nلشيد انتتيا الميتعل\nوتجذبه\nإليها .\nفي وي رض ذليد د اسية أبير بيل واغيط التيئية الجامعيية بواغيط افترا يي تيسير\nالمع يات التقنية الضديثة مما ينعكسًإيجابا\n. صل مجانية التعلي واغتصادياته\n\nوتتضييمن ييذ المع يييات تقنيييات االتصييال بمييا فيهييا ميين أغمييا صييناصي ة\nوشييتكات اتصييال يياتفي\nوتقنيييات اإل نترنييم وخ ييوو اكليييا الضييوئية ، كمييا\nتتضييمن أجهييز الضاسييع وغواصييد التيانيياتData Base System\n) وبعييد\nتعيييدد المسيييت دمينMulti\nUser\nDissention\n) واليييذكا االصييي ناصي\n\nArtificial intelligence\n) ."
+    ],
+    "reference_page_numbers": [
+      1
+    ],
+    "reference_chunk_ids": [
+      "03c9f2a0-4cd4-451b-9c3d-e209be1310e2"
+    ],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:14:11.324359+00:00",
+    "source_language": "ar",
+    "question_language": "ar"
+  },
+  {
+    "test_case_id": "TC-004",
+    "document_id": "1ef24635-4f7f-4849-93a7-3a4fc6bf1560",
+    "document_filename": "Arabic Document 2.pdf",
+    "document_hash": "0c08c0a585e9a1d672dc0226f885de55c521ad0441d3ad57746fdf6292333a2c",
+    "question": "لماذا يعتبر التركيز على الجانب التقني ضرورياً وفقاً للنص؟",
+    "language": "ar",
+    "category": "explanation",
+    "difficulty": "medium",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "النص يوضح أن مجرد توفر موارد دولية أو مالية لا يكفي لتجهيز البرمجيات أو المعدات، فإذا لم يُركز الجهد على التنمية التقنية فإن هذه الموارد لن تُستَغل بفعالية. لذلك يشدد النص على ضرورة التركيز على الجانب التقني لتحقيق التنمية التقنية المطلوبة.",
+    "required_facts": [
+      "النص يذكر أن الموارد الدولية أو المالية وحدها غير كافية.",
+      "النص يؤكد على ضرورة التركيز على التنمية التقنية.",
+      "الهدف هو تنمية التقنية لتحقيق الفعالية."
+    ],
+    "reference_contexts": [
+      "ييت بفعاليتهيييا التعليميييية والتنظيميييية\nواإلنتاجيية وننشيب\nبالتيالي مؤسسيات ومنظميات تتعاميل ميط يذ التقنيية بضيي\n. تنتجها وتعلمها وتتدصها\n4.\nال يكفيي أن ت صيص أي دولية صربيية متيالب واصتميادات ماليية ي مة لشيرا\nالمعيدات واكجهيز والترمجييات دون تركييز صلي التني\nالتضتيية اال تكا يية\n. الم لوبة لتنمية ذ التقنية"
+    ],
+    "reference_page_numbers": [
+      10
+    ],
+    "reference_chunk_ids": [
+      "432d866e-d0c8-4065-9132-e3310c466f4a"
+    ],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:14:49.301836+00:00",
+    "source_language": "ar",
+    "question_language": "ar"
+  },
+  {
+    "test_case_id": "TC-005",
+    "document_id": "1ef24635-4f7f-4849-93a7-3a4fc6bf1560",
+    "document_filename": "Arabic Document 2.pdf",
+    "document_hash": "0c08c0a585e9a1d672dc0226f885de55c521ad0441d3ad57746fdf6292333a2c",
+    "question": "كيف يصف النص أثر دمج التقنيات الحديثة مثل الذكاء الاصطناعي وأنظمة قواعد البيانات على البيئة التعليمية؟",
+    "language": "ar",
+    "category": "explanation",
+    "difficulty": "hard",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "يُشير النص إلى أن دمج التقنيات الحديثة مثل الذكاء الاصطناعي وأنظمة قواعد البيانات يخلق بيئة تعليمية تفصيلية وحيوية، ويساهم في تسهيل نقل المعرفة التقنية الحديثة، مما ينعكس إيجاباً على مجانية التعليم وتوسيع فرص التعلم.",
+    "required_facts": [
+      "النص يذكر أن دمج التقنيات الحديثة يخلق بيئة تفصيلية وحيوية.",
+      "النص يوضح أن ذلك ينعكس إيجاباً على مجانية التعليم.",
+      "النص يذكر أمثلة مثل الذكاء الاصطناعي وأنظمة قواعد البيانات."
+    ],
+    "reference_contexts": [
+      "اكمر الذي حيدا بيالتربويين إلي تتنيي أنمياو وبيدائل تعليميية مت يو ، وتيوفير\nبيئة تفاصلية وحيويية صلي د جية صاليية مين المرونية والكفيا\n؛\nلشيد انتتيا الميتعل\nوتجذبه\nإليها .\nفي وي رض ذليد د اسية أبير بيل واغيط التيئية الجامعيية بواغيط افترا يي تيسير\nالمع يات التقنية الضديثة مما ينعكسًإيجابا\n. صل مجانية التعلي واغتصادياته\n\nوتتضييمن ييذ المع يييات تقنيييات االتصييال بمييا فيهييا ميين أغمييا صييناصي ة\nوشييتكات اتصييال يياتفي\nوتقنيييات اإل نترنييم وخ ييوو اكليييا الضييوئية ، كمييا\nتتضييمن أجهييز الضاسييع وغواصييد التيانيياتData Base System\n) وبعييد\nتعيييدد المسيييت دمينMulti\nUser\nDissention\n) واليييذكا االصييي ناصي\n\nArtificial intelligence\n) ."
+    ],
+    "reference_page_numbers": [
+      1
+    ],
+    "reference_chunk_ids": [
+      "03c9f2a0-4cd4-451b-9c3d-e209be1310e2"
+    ],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:15:00.150525+00:00",
+    "source_language": "ar",
+    "question_language": "ar"
+  },
+  {
+    "test_case_id": "TC-006",
+    "document_id": "1ef24635-4f7f-4849-93a7-3a4fc6bf1560",
+    "document_filename": "Arabic Document 2.pdf",
+    "document_hash": "0c08c0a585e9a1d672dc0226f885de55c521ad0441d3ad57746fdf6292333a2c",
+    "question": "ما هو الدور الذي تلعبه تقنيتي الواقع الافتراضي والويب الافتراضي في تحسين استراتيجيات التعلم داخل البيئة الجامعية وفقًا للنص؟",
+    "language": "ar",
+    "category": "multi_chunk",
+    "difficulty": "medium",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "يُشير النص إلى أن تقنيتي الواقع الافتراضي (Virtual Reality) والويب الافتراضي (World Wide Web) تُعدّان من المكوّنات الأساسية التي أدت إلى ظهور تقنيات عديدة في مجال التعليم. فهما يوفّران وسيلةً افتراضيةً تُسهل على المعلم تقديم استراتيجيات تعليمية وعلمية، وتُعزّزان التعلم داخل الجامعات حيث يصبح التواجد الفعلي غير أساسي، مما يتيح للطلاب الاستفادة من بيئة تعليمية متكاملة ومُتاحة عبر الإنترنت.",
+    "required_facts": [
+      "ذكر النص تقنيتي الواقع الافتراضي (Virtual Reality) والويب الافتراضي (World Wide Web) كأمثلة على التقنيات الحديثة في التعليم.",
+      "ذكر النص أن الويب الافتراضي يسهّل استراتيجيات تعليمية وعلمية في البيئة الجامعية.",
+      "أشار النص إلى أن التواجد داخل الجامعة يصبح غير أساسي بفضل هذه التقنيات."
+    ],
+    "reference_contexts": [
+      "-\nالتقنيات الحدي: ثة وأثرها على التعليم والتعلم\n\nإن التقييدم السييريط فييي مجييال االتصيياالت والصييناصات الترفيهييية وظييرو\nالتنيافس فيي سيوق التجيا العالميية فيي مجيال الضاسيع صواميل أساسيية أدت إلي\n\" ت يو تقنيي كتيير بليب ذ وتيه بظهيو \" تقنييات الواغيط االفترا ييVirtual\nReality\n) والشتكة العنكتوتية العالمييةWorld Wide Web",
+      "يتعل تشيكل وفيى نميل المضتيوى التعليميي اليذي\n،يقدمه المعل ل لتته وفي مقدمتها الواغط االفترا ي\nالذي ييسر تتام ا\nاستراتيجيات\nتعليميية ت\nعلميّية\nأوسيط شيموالً وأكثير تي ًبيراً ، كميا ييسير ذليد اصتمياد نميل التعليي\nًالمرتتل بالضرم الجامعي الذي يعتتر التواجد داخله اليلة الوغم غير أساسي ، بيدال\nمن االغتصا\nصل نمل اليتعل المقتصير صلي الضيرم الجيامعي اليذي يعتتير الكتياي\nوالم تتير والتواصيل المتاشير ميط صضيو يئية التي د يس صناصير أساسيية للعمليية\n. التعليمية\n6\n)"
+    ],
+    "reference_page_numbers": [
+      5
+    ],
+    "reference_chunk_ids": [
+      "f763efd9-35c8-4663-80bc-2cc7b858c8da",
+      "3db2e0df-989e-4066-b5db-0d6431660419"
+    ],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:15:04.939691+00:00",
+    "source_language": "ar",
+    "question_language": "ar"
+  },
+  {
+    "test_case_id": "TC-007",
+    "document_id": "1ef24635-4f7f-4849-93a7-3a4fc6bf1560",
+    "document_filename": "Arabic Document 2.pdf",
+    "document_hash": "0c08c0a585e9a1d672dc0226f885de55c521ad0441d3ad57746fdf6292333a2c",
+    "question": "كيف يربط النص بين المعايير الرئيسة للدخول إلى مجال الفضاء وتكنولوجيا المعلومات والهيكلة التنيوية للنظام المؤسسي، وما هو الهدف النهائي من هذا الربط في سياق تنمية التقنية التعليمية؟",
+    "language": "ar",
+    "category": "multi_chunk",
+    "difficulty": "hard",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "النص يحدد أن الدخول إلى مجال الفضاء وتكنولوجيا المعلومات يتطلب معايير رئيسية تشمل الفضاء، تكنولوجيا المعلومات، الاتصالات، المعرفة، الجوانب الفكرية، التقنية، الثقافية والعلمية. بعد ذلك يشير إلى ضرورة إنشاء هيكلة تنيوية للنظام المؤسسي تُدمج تقنيات المعلومات والاتصالات الحديثة مع العملية التعليمية، بحيث تصبح جزءاً من الممارسة التعليمية وتدعم التعلم المستمر، التعلم الذاتي، والتعلم المتعدد الوسائط. الهدف النهائي من هذا الربط هو تنمية التقنية وتطوير الذكاء الاصطناعي في البيئة التعليمية.",
+    "required_facts": [
+      "المعايير الرئيسة للدخول تشمل الفضاء، تكنولوجيا المعلومات، الاتصالات، المعرفة، الجوانب الفكرية، التقنية، الثقافية والعلمية",
+      "ضرورة إنشاء هيكلة تنيوية للنظام المؤسسي ودمج تقنيات المعلومات والاتصالات الحديثة مع العملية التعليمية",
+      "الهدف هو تنمية التقنية وتطوير الذكاء الاصطناعي في البيئة التعليمية"
+    ],
+    "reference_contexts": [
+      "ييت بفعاليتهيييا التعليميييية والتنظيميييية\nواإلنتاجيية وننشيب\nبالتيالي مؤسسيات ومنظميات تتعاميل ميط يذ التقنيية بضيي\n. تنتجها وتعلمها وتتدصها\n4.\nال يكفيي أن ت صيص أي دولية صربيية متيالب واصتميادات ماليية ي مة لشيرا\nالمعيدات واكجهيز والترمجييات دون تركييز صلي التني\nالتضتيية اال تكا يية\n. الم لوبة لتنمية ذ التقنية",
+      "5.\nالمعتييير الرئيسيييي لليييدخول إلييي\nصيييال الفضيييائيات وتكنولوجييييا المعلوميييات\nواالتصاالت وإبيدام\nالمعرفية ييت صين ال رييى معرفية إيقاصيات\nالعصير الفكريية\nوالتقنييية وصالمييية الثقافيية\nواإللمييام\nوالفهيي الكييافي لواغعنييا الفكييري والمعرفييي\n. التراكمي الثقافي\n6.\nإصاد الهيكلة التنيوية للنظام المؤسسي بكيل غ اصاتيه ، والتعليميي بوجيه خيات\nمييط اال تمييام ب لييية التضيي العلمييي والعمييل صليي\nإحييالل تقنيييات المعلوميي ات\nواالتصياالت الضديثية صين الرييى\nدمجهيا بالعمليية التعليميية ت التع لّميية ، وصيدم\nاالكتفييا بالسييير فييي نهييج التعلييي الكالسيي يكي واليير بييدائل تعليمييية ت تعلّمييية\nكالتعلي المستمر ونظ التعلي الذاتي والتعلي االفترا ي المتنيية صلي اسيت دام\n. الذكا االص ناصي\n7.\nإ الة الضواجز\nوالعوائى النفسية واالجت\nماصية ونشر بقافة المستقتل معرّبة سهلة\nوصميقة وصيريضة وإنسيانية "
+    ],
+    "reference_page_numbers": [
+      10,
+      11
+    ],
+    "reference_chunk_ids": [
+      "432d866e-d0c8-4065-9132-e3310c466f4a",
+      "e254bd73-4a6d-4853-9890-57db6575341a"
+    ],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:15:52.562292+00:00",
+    "source_language": "ar",
+    "question_language": "ar"
+  },
+  {
+    "test_case_id": "TC-008",
+    "document_id": "1ef24635-4f7f-4849-93a7-3a4fc6bf1560",
+    "document_filename": "Arabic Document 2.pdf",
+    "document_hash": "0c08c0a585e9a1d672dc0226f885de55c521ad0441d3ad57746fdf6292333a2c",
+    "question": "ما الفرق بين نقاط القوة ونقاط الضعف التي تم الكشف عنها في استخدام تكنولوجيا المعلومات والاتصالات في الخدمات التعليمية وفقًا للنص؟",
+    "language": "ar",
+    "category": "comparison",
+    "difficulty": "medium",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "النص يذكر أن هناك عملية كشف لكل من نقاط القوة ونقاط الضعف في توظيف تكنولوجيا المعلومات والاتصالات داخل الخدمات التعليمية. نقاط القوة تمثل الجوانب التي تدعم وتحسن جودة الخدمات التعليمية وتساعد على الاستفادة من التقنية، بينما نقاط الضعف تشير إلى الجوانب التي تعيق أو تقلل من فعالية هذه التقنية وتؤدي إلى صعوبات ومعوّقات تحول دون الاستفادة الكاملة منها.",
+    "required_facts": [
+      "وجود عملية كشف لنقاط القوة في تكنولوجيا المعلومات والاتصالات في الخدمات التعليمية",
+      "وجود عملية كشف لنقاط الضعف في تكنولوجيا المعلومات والاتصالات في الخدمات التعليمية",
+      "الإشارة إلى الصعوبات والمعوّقات التي تعيق الاستفادة من هذه التقنية"
+    ],
+    "reference_contexts": [
+      "يييا\nالمعلوميات واالتصياالت فيي ال يدمات التعليميية ، وأخييراً الكشيف صين نقياو القيو\nوالضعف في معال التنيية التضتيية لتكنولوجييا المعلوميات واالتصياالت فيي التليدان\nالناميية لتضدييد ميدى جا زيتهيا وإسيهامها\nفيي خدمية غضيايا اليتعل إ يافة\nلتو يي\nالصعوبات والمعوغات التي تواجه الو ط التعليميي اليرا ن\nوت ضيول دون اسيتفادته\nميين مع يييات مصيياد تكنولوجيييا المعلومييات واالتصيياالت مييط اغتييرا الضلييول\n.المناستة"
+    ],
+    "reference_page_numbers": [
+      2
+    ],
+    "reference_chunk_ids": [
+      "89d9a844-6fcd-4442-a950-057e775c1873"
+    ],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:16:03.252478+00:00",
+    "source_language": "ar",
+    "question_language": "ar"
+  },
+  {
+    "test_case_id": "TC-009",
+    "document_id": "1ef24635-4f7f-4849-93a7-3a4fc6bf1560",
+    "document_filename": "Arabic Document 2.pdf",
+    "document_hash": "0c08c0a585e9a1d672dc0226f885de55c521ad0441d3ad57746fdf6292333a2c",
+    "question": "ما الهدف من توفير بيئة تعليمية تفصيلية وحيوية كما يذكر النص؟",
+    "language": "ar",
+    "category": "summary",
+    "difficulty": "medium",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "يهدف النص إلى جذب المتعلمين وتعزيز تفاعلهم من خلال توفير بيئة تعليمية تفصيلية وحيوية، مما يسهم في تحسين جودة التعلم.",
+    "required_facts": [
+      "النص يذكر توفير بيئة تفصيلية وحيوية",
+      "الهدف هو جذب المتعلمين وتعزيز تفاعلهم"
+    ],
+    "reference_contexts": [
+      "اكمر الذي حيدا بيالتربويين إلي تتنيي أنمياو وبيدائل تعليميية مت يو ، وتيوفير\nبيئة تفاصلية وحيويية صلي د جية صاليية مين المرونية والكفيا\n؛\nلشيد انتتيا الميتعل\nوتجذبه\nإليها .\nفي وي رض ذليد د اسية أبير بيل واغيط التيئية الجامعيية بواغيط افترا يي تيسير\nالمع يات التقنية الضديثة مما ينعكسًإيجابا\n. صل مجانية التعلي واغتصادياته\n\nوتتضييمن ييذ المع يييات تقنيييات االتصييال بمييا فيهييا ميين أغمييا صييناصي ة\nوشييتكات اتصييال يياتفي\nوتقنيييات اإل نترنييم وخ ييوو اكليييا الضييوئية ، كمييا\nتتضييمن أجهييز الضاسييع وغواصييد التيانيياتData Base System\n) وبعييد\nتعيييدد المسيييت دمينMulti\nUser\nDissention\n) واليييذكا االصييي ناصي\n\nArtificial intelligence\n) ."
+    ],
+    "reference_page_numbers": [
+      1
+    ],
+    "reference_chunk_ids": [
+      "03c9f2a0-4cd4-451b-9c3d-e209be1310e2"
+    ],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:16:09.590548+00:00",
+    "source_language": "ar",
+    "question_language": "ar"
+  },
+  {
+    "test_case_id": "TC-010",
+    "document_id": "1ef24635-4f7f-4849-93a7-3a4fc6bf1560",
+    "document_filename": "Arabic Document 2.pdf",
+    "document_hash": "0c08c0a585e9a1d672dc0226f885de55c521ad0441d3ad57746fdf6292333a2c",
+    "question": "ما هو عدد الموظفين الذين يعملون في المؤسسة المذكورة في النص؟",
+    "language": "ar",
+    "category": "unanswerable",
+    "difficulty": "easy",
+    "answerable": false,
+    "expected_behavior": "fallback",
+    "reference_answer": null,
+    "required_facts": [],
+    "reference_contexts": [],
+    "reference_page_numbers": [],
+    "reference_chunk_ids": [],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:16:51.118895+00:00",
+    "unanswerable_rationale": "The snippet provided contains only vague references to educational, organizational, and production activities, technical institutions, and general challenges. It does not include any quantitative data such as the number of staff members employed by the institution, nor does the broader document (as far as the excerpt shows) mention staffing figures. Therefore, the answer cannot be derived from the given context.",
+    "source_language": "ar",
+    "question_language": "ar"
+  },
+  {
+    "test_case_id": "TC-011",
+    "document_id": "0d453a69-e504-48c6-bc6c-09e801756218",
+    "document_filename": "English Document 1.pdf",
+    "document_hash": "8cfb265fe2877d0c44522848485fe55334ad041b4f55e0036748058dee47fc67",
+    "question": "What are the three phases in which generative AI operates?",
+    "language": "en",
+    "category": "direct_factual",
+    "difficulty": "easy",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "Generative AI operates in three phases: Training, Tuning, and Generation (which includes evaluation and retuning).",
+    "required_facts": [
+      "Generative AI operates in three phases",
+      "The phases are Training, Tuning, and Generation (evaluation and retuning)"
+    ],
+    "reference_contexts": [
+      "4\nGenerative AI\n\nHow generative AI works\nGenerative AI operates in three phases:\n• Training, to create a foundation model that can\nserve as the basis of multiple gen AI applications.\nTuning, to tailor the foundation model to a\nspecific gen AI application.\nGeneration, evaluation and retuning, to assess\nthe gen AI application's output and continually\nimprove its quality and accuracy.\n5"
+    ],
+    "reference_page_numbers": [
+      4
+    ],
+    "reference_chunk_ids": [
+      "15a40911-a9ee-4f4f-aeb7-2e82cd609433"
+    ],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:17:04.552988+00:00",
+    "source_language": "en",
+    "question_language": "en"
+  },
+  {
+    "test_case_id": "TC-012",
+    "document_id": "0d453a69-e504-48c6-bc6c-09e801756218",
+    "document_filename": "English Document 1.pdf",
+    "document_hash": "8cfb265fe2877d0c44522848485fe55334ad041b4f55e0036748058dee47fc67",
+    "question": "What kinds of new content can generative AI create, and how is its training objective different from that of a typical predictive machine‑learning model?",
+    "language": "en",
+    "category": "direct_factual",
+    "difficulty": "medium",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "Generative AI can create new content such as text, images, audio, video, or code. Unlike typical predictive models that are trained to make predictions about a specific dataset, a generative AI model is trained to create new data that resembles the data it was trained on.",
+    "required_facts": [
+      "Generative AI can create new content—text, images, audio, video, or code.",
+      "It is trained to create new data rather than make predictions about a specific dataset."
+    ],
+    "reference_contexts": [
+      "Selected Labs in AI\nGenerative AI\nSpring 2026\n\nAI World\n2\n\nGenerative AI\n• Generative\nAI\n(short\nfor\ngenerative\nartificial\nintelligence) refers to a type of AI that can create new\ncontent—such as text, images, audio, video, or code—\nbased on patterns it has learned from existing data.\n• Generative AI can be thought of as a machine-learning\nmodel that is trained to create new data, rather than\nmaking a prediction about a specific dataset.\n• A generative AI system is one that learns to generate\nmore objects that look like the data it was trained on.\n3\n\n4\nGenerative AI"
+    ],
+    "reference_page_numbers": [
+      1
+    ],
+    "reference_chunk_ids": [
+      "3bc87535-178c-4bc0-994c-3a6119adc775"
+    ],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:17:11.028965+00:00",
+    "source_language": "en",
+    "question_language": "en"
+  },
+  {
+    "test_case_id": "TC-013",
+    "document_id": "0d453a69-e504-48c6-bc6c-09e801756218",
+    "document_filename": "English Document 1.pdf",
+    "document_hash": "8cfb265fe2877d0c44522848485fe55334ad041b4f55e0036748058dee47fc67",
+    "question": "If a user inputs a sentence that contains both the words \"hello\" and \"bye\", which response will the chatbot return and why?",
+    "language": "en",
+    "category": "direct_factual",
+    "difficulty": "hard",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "The chatbot will return a random response from the \"hello\" list (e.g., \"Hi there!\", \"Hello!\", or \"Hey! How can I help you?\"). This is because the function iterates over the keys of the `responses` dictionary in the order they are defined (\"hello\", \"how are you\", \"bye\", \"default\") and returns the first matching response it finds, exiting the loop immediately.",
+    "required_facts": [
+      "The `for key in responses:` loop checks keys in the order they appear in the dictionary (\"hello\" before \"bye\").",
+      "When a key is found in the user input, the function returns `random.choice(responses[key])` and stops further checking.",
+      "The dictionary defines the \"hello\" key before the \"bye\" key."
+    ],
+    "reference_contexts": [
+      "simple python code for chatbot\n•\nimport random\n•\n# Predefined responses\n•\nresponses = {\n•\n\"hello\": [\"Hi there!\", \"Hello!\", \"Hey! How can I help you?\"],\n•\n\"how are you\": [\"I'm just a program, but I'm doing fine! How about\nyou?\", \"I'm good! What about you?\"],\n•\n\"bye\": [\"Goodbye!\", \"See you later!\", \"Take care!\"],\n•\n\"default\": [\"I'm sorry, I don't understand that. Can you rephrase?\"]\n•\n}\n•\ndef chatbot_response(user_input):\n•\nuser_input = user_input.lower()\n•\nfor key in responses:\n•\nif key in user_input:\n•\nreturn random.choice(responses[key])\n•\nreturn random.choice(responses[\"default\"])\n17"
+    ],
+    "reference_page_numbers": [
+      17
+    ],
+    "reference_chunk_ids": [
+      "eef4057d-6e37-43ce-8a91-5d48bb04accd"
+    ],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:17:20.341056+00:00",
+    "source_language": "en",
+    "question_language": "en"
+  },
+  {
+    "test_case_id": "TC-014",
+    "document_id": "0d453a69-e504-48c6-bc6c-09e801756218",
+    "document_filename": "English Document 1.pdf",
+    "document_hash": "8cfb265fe2877d0c44522848485fe55334ad041b4f55e0036748058dee47fc67",
+    "question": "How does the attention map generated by a transformer contribute to its ability to understand context when producing new text?",
+    "language": "en",
+    "category": "explanation",
+    "difficulty": "medium",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "A transformer first encodes each word in a text corpus as a token. It then creates an attention map that captures the relationships between every token and all other tokens. This attention map provides the transformer with information about how words relate to each other, allowing it to grasp the context of the sentence and generate new text that reflects the intended meaning.",
+    "required_facts": [
+      "A transformer encodes each word as a token.",
+      "It generates an attention map that captures each token’s relationships with all other tokens.",
+      "The attention map helps the transformer understand context when generating new text."
+    ],
+    "reference_contexts": [
+      "Large Language Models (LLMs)\n• In 2017, researchers at Google introduced the\ntransformer architecture, which has been used to\ndevelop large language models, like those that\npower ChatGPT.\n• In natural language processing, a transformer\nencodes each word in a corpus of text as a token\nand then generates an attention map, which\ncaptures each token’s relationships with all other\ntokens.\n• This attention map helps the transformer\nunderstand context when it generates new text.\n8\nعالقات بين الكلمات اللي موجودة في الجمله ==> بيخليه\nيفهم سياق الكالم واي اللي الكالم يقصده\nnew textعشان لما يعمل\n\nLarge Language Models (LLMs)\n• A Large Language Model is an AI trained on\nmassive amounts of text data to understand\nand generate human language.\n9"
+    ],
+    "reference_page_numbers": [
+      8
+    ],
+    "reference_chunk_ids": [
+      "44b482c6-6617-4e22-8a8c-e2130352c8fc"
+    ],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:17:29.713205+00:00",
+    "source_language": "en",
+    "question_language": "en"
+  },
+  {
+    "test_case_id": "TC-015",
+    "document_id": "0d453a69-e504-48c6-bc6c-09e801756218",
+    "document_filename": "English Document 1.pdf",
+    "document_hash": "8cfb265fe2877d0c44522848485fe55334ad041b4f55e0036748058dee47fc67",
+    "question": "How does the training phase of a foundation model use large-scale raw data and fill‑in‑the‑blank tasks to continuously reduce the gap between its predictions and the actual data?",
+    "language": "en",
+    "category": "explanation",
+    "difficulty": "hard",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "In the training phase, practitioners feed a deep learning algorithm with massive amounts of raw, unstructured, unlabeled data—often terabytes sourced from the internet or similar large repositories. The algorithm then carries out millions of fill‑in‑the‑blank exercises, where it tries to predict the next element in a sequence, such as the next word in a sentence, the next pixel or object in an image, or the next command in a line of code. After each prediction, the model compares its output to the true next element and adjusts its internal parameters to minimize the difference between the predicted and actual values, repeating this process iteratively to continually shrink the prediction error.",
+    "required_facts": [
+      "Training uses huge volumes of raw, unstructured, unlabeled data (e.g., terabytes from the internet).",
+      "The algorithm performs fill‑in‑the‑blank exercises predicting the next element in a sequence (word, image element, code command).",
+      "It continually adjusts itself to minimize the difference between its predictions and the actual data."
+    ],
+    "reference_contexts": [
+      "Training Phase\n• To create a foundation model, practitioners train a deep\nlearning algorithm on huge volumes of raw, unstructured,\nunlabeled data e.g., terabytes of data from the internet\nor some other huge data source.\n• During training, the algorithm performs and evaluates\nmillions of ‘fill in the blank’ exercises, trying to predict\nthe next element in a sequence e.g., the next word in a\nsentence, the next element in an image, the next\ncommand in a line of code and continually adjusting itself\nto minimize the difference between its predictions and\nthe actual data.\n7\nاو الفرق بين المتوقع والحقيقي ونحاول نقلل الرقم ده علطول بشكل دوريErrorبنحاول نقلل"
+    ],
+    "reference_page_numbers": [
+      7
+    ],
+    "reference_chunk_ids": [
+      "a59ae8a1-20d6-4527-b916-5c247b417107"
+    ],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:17:39.698325+00:00",
+    "source_language": "en",
+    "question_language": "en"
+  },
+  {
+    "test_case_id": "TC-016",
+    "document_id": "0d453a69-e504-48c6-bc6c-09e801756218",
+    "document_filename": "English Document 1.pdf",
+    "document_hash": "8cfb265fe2877d0c44522848485fe55334ad041b4f55e0036748058dee47fc67",
+    "question": "What are the key aspects of the training phase for foundation models, and how do these aspects correspond to the scale, training method, and capabilities described for large language models?",
+    "language": "en",
+    "category": "multi_chunk",
+    "difficulty": "medium",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "The training phase for foundation models involves training a deep‑learning algorithm on massive amounts of raw, unstructured, unlabeled data—often terabytes from the internet. During this phase the model performs millions of fill‑in‑the‑blank tasks, trying to predict the next element in a sequence (such as the next word, image part, or code command) and continuously adjusts to reduce the gap between its predictions and the actual data. Large language models share similar characteristics: they are trained on very large text datasets (books, articles, websites) containing billions of words, using deep learning techniques based on the Transformer architecture. This large‑scale training gives LLMs capabilities such as answering questions, translating text, summarizing content, and generating stories. Thus, the foundation‑model training process of using huge raw data and predictive fill‑in‑the‑blank tasks underlies the scale and deep‑learning‑Transformer method that enable the diverse capabilities of LLMs.",
+    "required_facts": [
+      "Foundation model training uses huge volumes of raw, unstructured, unlabeled data and fill‑in‑the‑blank exercises to predict the next element and minimize prediction error.",
+      "Large language models are trained on massive text datasets with billions of words, using deep learning based on the Transformer architecture.",
+      "LLMs can answer questions, translate, summarize, and generate stories as a result of this large‑scale training."
+    ],
+    "reference_contexts": [
+      "Training Phase\n• To create a foundation model, practitioners train a deep\nlearning algorithm on huge volumes of raw, unstructured,\nunlabeled data e.g., terabytes of data from the internet\nor some other huge data source.\n• During training, the algorithm performs and evaluates\nmillions of ‘fill in the blank’ exercises, trying to predict\nthe next element in a sequence e.g., the next word in a\nsentence, the next element in an image, the next\ncommand in a line of code and continually adjusting itself\nto minimize the difference between its predictions and\nthe actual data.\n7\nاو الفرق بين المتوقع والحقيقي ونحاول نقلل الرقم ده علطول بشكل دوريErrorبنحاول نقلل",
+      "Large Language Models (LLMs)\n• A Large Language Model is an AI trained on\nmassive amounts of text data to understand\nand generate human language.\n9\n\nLarge Language Models - Features\n10\nScale | Trained on large datasets (books, articles, websites) with\nbillions of words.\nCapabilities | Can answer questions, translate text, summarize,\nwrite stories, and more.\nTraining method | Uses a technique called deep learning—often\nbased on a neural network called a Transformer.\nFamous Examples | ChatGPT (by OpenAI), Bard (by Google),\nClaude (by Anthropic), LLaMA (by Meta)."
+    ],
+    "reference_page_numbers": [
+      7,
+      9
+    ],
+    "reference_chunk_ids": [
+      "a59ae8a1-20d6-4527-b916-5c247b417107",
+      "810156c8-9520-40cf-9836-53794c5a9612"
+    ],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:17:48.318218+00:00",
+    "source_language": "en",
+    "question_language": "en"
+  },
+  {
+    "test_case_id": "TC-017",
+    "document_id": "0d453a69-e504-48c6-bc6c-09e801756218",
+    "document_filename": "English Document 1.pdf",
+    "document_hash": "8cfb265fe2877d0c44522848485fe55334ad041b4f55e0036748058dee47fc67",
+    "question": "In generative AI, how do large language models differ from other foundation models, and what transformer-based mechanism introduced in 2017 enables them to capture contextual relationships between tokens?",
+    "language": "en",
+    "category": "multi_chunk",
+    "difficulty": "hard",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "Large language models (LLMs) are the most common foundation models used today and are specifically created for text‑generation applications, whereas other foundation models are designed for generating images, video, sound, music, or multimodal content. The ability of LLMs to understand context comes from the transformer architecture that Google introduced in 2017. A transformer encodes each word in a corpus as a token and then builds an attention map that records the relationships between every token and all other tokens; this attention map allows the model to grasp contextual meaning when it generates new text.",
+    "required_facts": [
+      "LLMs are the most common foundation models for text generation, while other foundation models support image, video, sound, music, and multimodal content.",
+      "The transformer architecture was introduced by Google in 2017 and is used to develop large language models.",
+      "Transformers encode words as tokens and generate an attention map that captures relationships between all tokens, helping the model understand context."
+    ],
+    "reference_contexts": [
+      "Training Phase\n• Generative AI begins with a foundation model, a\ndeep learning model that serves as the basis for\nmultiple\ndifferent\ntypes\nof\ngenerative\nAI\napplications.\n• The most common foundation models today\nare Large Language Models (LLMs), created for\ntext generation applications.\n• There are also foundation models for image\ngeneration, video generation, and sound and\nmusic\ngeneration\nas\nwell\nas\nmultimodal\nfoundation models that can support several kinds\ncontent generation.\n6",
+      "Large Language Models (LLMs)\n• In 2017, researchers at Google introduced the\ntransformer architecture, which has been used to\ndevelop large language models, like those that\npower ChatGPT.\n• In natural language processing, a transformer\nencodes each word in a corpus of text as a token\nand then generates an attention map, which\ncaptures each token’s relationships with all other\ntokens.\n• This attention map helps the transformer\nunderstand context when it generates new text.\n8\nعالقات بين الكلمات اللي موجودة في الجمله ==> بيخليه\nيفهم سياق الكالم واي اللي الكالم يقصده\nnew textعشان لما يعمل\n\nLarge Language Models (LLMs)\n• A Large Language Model is an AI trained on\nmassive amounts of text data to understand\nand generate human language.\n9"
+    ],
+    "reference_page_numbers": [
+      6,
+      8
+    ],
+    "reference_chunk_ids": [
+      "80137b41-3073-4afc-8157-e46e832cfef6",
+      "44b482c6-6617-4e22-8a8c-e2130352c8fc"
+    ],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:17:58.219763+00:00",
+    "source_language": "en",
+    "question_language": "en"
+  },
+  {
+    "test_case_id": "TC-018",
+    "document_id": "0d453a69-e504-48c6-bc6c-09e801756218",
+    "document_filename": "English Document 1.pdf",
+    "document_hash": "8cfb265fe2877d0c44522848485fe55334ad041b4f55e0036748058dee47fc67",
+    "question": "How does the content stored in the variable \"summary\" differ from the content stored in the variable \"text\" in the provided code snippet?",
+    "language": "en",
+    "category": "comparison",
+    "difficulty": "medium",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "In the snippet, \"text\" holds the original input text, while \"summary\" contains the condensed version produced by the summarizer function, which limits the output to a maximum of 60 tokens.",
+    "required_facts": [
+      "The variable \"text\" is the original input.",
+      "The summarizer function creates a shortened version with max_length=60.",
+      "The result of the summarizer is stored in the variable \"summary\"."
+    ],
+    "reference_contexts": [
+      ".\n•\n\"\"\"\n•\n# Generate a summary\n•\nsummary = summarizer(text, max_length=60)\n•\n# Print the summary\n•\nprint(\"Summary:\")\n•\nprint(summary)\n16\nهنا اديله نص يلخصهولي"
+    ],
+    "reference_page_numbers": [
+      16
+    ],
+    "reference_chunk_ids": [
+      "5fe1163e-6944-46ac-9447-84d33da8c7f6"
+    ],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:18:47.778100+00:00",
+    "source_language": "en",
+    "question_language": "en"
+  },
+  {
+    "test_case_id": "TC-019",
+    "document_id": "0d453a69-e504-48c6-bc6c-09e801756218",
+    "document_filename": "English Document 1.pdf",
+    "document_hash": "8cfb265fe2877d0c44522848485fe55334ad041b4f55e0036748058dee47fc67",
+    "question": "What response does the chatbot give when the user's input does not contain any of the predefined keywords?",
+    "language": "en",
+    "category": "summary",
+    "difficulty": "medium",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "The function first converts the input to lowercase, then iterates over all keys in the responses dictionary. If none of the keys are found in the input, it returns a random choice from the \"default\" list, which contains the message \"I'm sorry, I don't understand that. Can you rephrase?\".",
+    "required_facts": [
+      "The function lowercases the user input.",
+      "It loops through each key in the responses dictionary.",
+      "If no key matches, it returns a random choice from responses[\"default\"]."
+    ],
+    "reference_contexts": [
+      "simple python code for chatbot\n•\nimport random\n•\n# Predefined responses\n•\nresponses = {\n•\n\"hello\": [\"Hi there!\", \"Hello!\", \"Hey! How can I help you?\"],\n•\n\"how are you\": [\"I'm just a program, but I'm doing fine! How about\nyou?\", \"I'm good! What about you?\"],\n•\n\"bye\": [\"Goodbye!\", \"See you later!\", \"Take care!\"],\n•\n\"default\": [\"I'm sorry, I don't understand that. Can you rephrase?\"]\n•\n}\n•\ndef chatbot_response(user_input):\n•\nuser_input = user_input.lower()\n•\nfor key in responses:\n•\nif key in user_input:\n•\nreturn random.choice(responses[key])\n•\nreturn random.choice(responses[\"default\"])\n17"
+    ],
+    "reference_page_numbers": [
+      17
+    ],
+    "reference_chunk_ids": [
+      "eef4057d-6e37-43ce-8a91-5d48bb04accd"
+    ],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:19:25.571616+00:00",
+    "source_language": "en",
+    "question_language": "en"
+  },
+  {
+    "test_case_id": "TC-020",
+    "document_id": "0d453a69-e504-48c6-bc6c-09e801756218",
+    "document_filename": "English Document 1.pdf",
+    "document_hash": "8cfb265fe2877d0c44522848485fe55334ad041b4f55e0036748058dee47fc67",
+    "question": "What is the name of the pre‑trained model that the summarizer function utilizes in the code example?",
+    "language": "en",
+    "category": "unanswerable",
+    "difficulty": "easy",
+    "answerable": false,
+    "expected_behavior": "fallback",
+    "reference_answer": null,
+    "required_facts": [],
+    "reference_contexts": [],
+    "reference_page_numbers": [],
+    "reference_chunk_ids": [],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:20:03.155144+00:00",
+    "unanswerable_rationale": "The provided snippet only shows how the summarizer is called with a text input and a max_length parameter, and it prints the resulting summary. It does not specify which pre‑trained model (e.g., BART, T5, Pegasus) the summarizer is based on, nor does the broader document contain that information. Therefore, the answer cannot be derived from the given context.",
+    "source_language": "en",
+    "question_language": "en"
+  },
+  {
+    "test_case_id": "TC-021",
+    "document_id": "6be74837-9a43-44ff-bba2-eebaeeb10823",
+    "document_filename": "Document 3 Advanced.pdf",
+    "document_hash": "1739e0672142983fd4b931c6625eebda645a0b193937f9fff0e445a083b9c8e3",
+    "question": "What operational principle does a Global Navigation Satellite System (GNSS) use to determine a location?",
+    "language": "en",
+    "category": "direct_factual",
+    "difficulty": "easy",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "GNSS determines a location by using trilateration with signals from at least four satellites.",
+    "required_facts": [
+      "GNSS uses trilateration using signals from at least four satellites to determine location."
+    ],
+    "reference_contexts": [
+      "Global Navigation Satellite Systems (GNSS)\n• A system of multiple satellite constellations providing worldwide\npositioning.\n• Key Global Systems: GPS (USA), GLONASS (Russia), Galileo (EU), BeiDou\n(China).\n• Operational Principle: Trilateration using signals from at least four satellites\nto determine location."
+    ],
+    "reference_page_numbers": [
+      4
+    ],
+    "reference_chunk_ids": [
+      "061b3eb1-18aa-49d6-8b66-67f5b86aa521"
+    ],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:20:16.725152+00:00",
+    "source_language": "en",
+    "question_language": "en"
+  },
+  {
+    "test_case_id": "TC-022",
+    "document_id": "6be74837-9a43-44ff-bba2-eebaeeb10823",
+    "document_filename": "Document 3 Advanced.pdf",
+    "document_hash": "1739e0672142983fd4b931c6625eebda645a0b193937f9fff0e445a083b9c8e3",
+    "question": "What types of satellite navigation systems are described and how does their coverage differ?",
+    "language": "en",
+    "category": "direct_factual",
+    "difficulty": "medium",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "The snippet describes two types: Global Navigation Satellite Systems (GNSS), which provide worldwide coverage, and Regional Navigation Satellite Systems (RNSS), which provide coverage for specific regions.",
+    "required_facts": [
+      "Global Navigation Satellite Systems (GNSS) provide worldwide coverage",
+      "Regional Navigation Satellite Systems (RNSS) provide coverage for specific regions",
+      "These are the two types mentioned in the text"
+    ],
+    "reference_contexts": [
+      "Wireless and Mobile Networks\nSpring Semester\n2025-2026\nIT439\n9\n\nPart 2\nSatellites\n\nSatellite Navigation Systems\nSatellite Navigation Systems are networks of satellites that provide geolocation\nand time data to receivers on Earth.\nIt is crucial for global positioning, aviation, marine navigation, mapping,\ndisaster response, agriculture, and defense.\nTypes:\n• Global Navigation Satellite Systems (GNSS) – Provide worldwide coverage.\n• Regional Navigation Satellite Systems (RNSS) – Provide coverage for\nspecific regions."
+    ],
+    "reference_page_numbers": [
+      1
+    ],
+    "reference_chunk_ids": [
+      "1d7287da-ae74-4359-b8cc-c3c538af7199"
+    ],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:20:27.481480+00:00",
+    "source_language": "en",
+    "question_language": "en"
+  },
+  {
+    "test_case_id": "TC-023",
+    "document_id": "6be74837-9a43-44ff-bba2-eebaeeb10823",
+    "document_filename": "Document 3 Advanced.pdf",
+    "document_hash": "1739e0672142983fd4b931c6625eebda645a0b193937f9fff0e445a083b9c8e3",
+    "question": "ما هو اسم الجهة المشغلة لنظام Galileo ومتى بدأ تشغيله الكامل وفقًا للجدول المقارن؟",
+    "language": "ar",
+    "category": "direct_factual",
+    "difficulty": "hard",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "الجهة المشغلة لنظام Galileo هي وكالة الاتحاد الأوروبي لبرنامج الفضاء (EUSPA)، وبدأ تشغيله الكامل في عام 2016.",
+    "required_facts": [
+      "المشغل الرسمي لنظام Galileo هو European Union Agency for the Space Programme (EUSPA)",
+      "سنة بدء التشغيل الكامل لنظام Galileo هي 2016"
+    ],
+    "reference_contexts": [
+      "How GPS works? (cont.)\nDifferential GPS (DGPS)\nAccuracy Improvement:\n• Reduces errors from ~3-5 meters to sub-meter or even centimeter-level accuracy\n\nGNSSs Comparison\nFeature\nGPS (USA)\nGLONASS (Russia)\nGalileo (EU)\nBeiDou (China)\nOfficial Name\nGlobal Positioning\nSystem\nGlobalnaya\nNavigatsionnaya\nSputnikovaya Sistema\nGalileo\nBeiDou Navigation\nSatellite System (BDS)\nOperator\nUS Space Force\nRussian Aerospace\nForces\nEuropean Union\nAgency for the Space\nProgramme (EUSPA)\nChina Satellite\nNavigation Office\nFirst Launch\n1978\n1982\n2011 (Full Ops: 2016)\n2000 (BDS-3: 2020)\nGlobal Coverage\nYes\nYes\nYes\nYes\n• System Overview"
+    ],
+    "reference_page_numbers": [
+      12
+    ],
+    "reference_chunk_ids": [
+      "911c30eb-ff0b-45d6-992e-b7bb87b107ff"
+    ],
+    "cross_lingual": true,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:20:40.523355+00:00",
+    "source_language": "en",
+    "question_language": "ar"
+  },
+  {
+    "test_case_id": "TC-024",
+    "document_id": "6be74837-9a43-44ff-bba2-eebaeeb10823",
+    "document_filename": "Document 3 Advanced.pdf",
+    "document_hash": "1739e0672142983fd4b931c6625eebda645a0b193937f9fff0e445a083b9c8e3",
+    "question": "How does Differential GPS (DGPS) improve the accuracy of standard GPS signals?",
+    "language": "en",
+    "category": "explanation",
+    "difficulty": "medium",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "Differential GPS improves accuracy by using a ground‑based reference station located at a known position. The station receives the GPS signals and calculates the errors caused by atmospheric conditions and satellite clock inaccuracies. It then creates correction data, which is sent to nearby GPS receivers via radio or the internet. The receivers apply these corrections to their own measurements, resulting in a more precise position.",
+    "required_facts": [
+      "A ground‑based reference station at a known location receives GPS signals and calculates errors.",
+      "The station generates correction data and transmits it to nearby GPS receivers.",
+      "GPS receivers apply the corrections to refine their positioning accuracy."
+    ],
+    "reference_contexts": [
+      "How GPS works? (cont.)\nTrilateration\n\nHow GPS works? (cont.)\nTrilateration\n\nHow GPS works? (cont.)\nTrilateration\n\nHow GPS works? (cont.)\nTrilateration\n\nHow GPS works? (cont.)\nDifferential GPS (DGPS)\nA technique to improve the accuracy of standard GPS signals\nby using correction data from fixed reference stations.\nHow It Works:\n• A ground-based reference station at a known location\nreceives GPS signals.\n• The station calculates errors in GPS signals caused by\natmospheric conditions and satellite clock inaccuracies.\n• The correction data is transmitted to nearby GPS\nreceivers via radio signals or the internet.\n• GPS receivers apply the corrections to refine their\npositioning accuracy."
+    ],
+    "reference_page_numbers": [
+      7
+    ],
+    "reference_chunk_ids": [
+      "73482c7e-b5bc-495f-92c2-ef306da8d5dd"
+    ],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:20:53.938620+00:00",
+    "source_language": "en",
+    "question_language": "en"
+  },
+  {
+    "test_case_id": "TC-025",
+    "document_id": "6be74837-9a43-44ff-bba2-eebaeeb10823",
+    "document_filename": "Document 3 Advanced.pdf",
+    "document_hash": "1739e0672142983fd4b931c6625eebda645a0b193937f9fff0e445a083b9c8e3",
+    "question": "ما هو الفرق بين الأخطاء التي تصححها محطة الإشارة الأرضية في نظام GPS التفاضلي (DGPS) مقارنةً بالأخطاء التي تؤثر على إشارات GPS التقليدية، وكيف يتم حساب هذه الأخطاء؟",
+    "language": "ar",
+    "category": "explanation",
+    "difficulty": "hard",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "في نظام GPS التفاضلي (DGPS) تُستخدم محطة إشارة أرضية تقع في موقع معروف لتلقي إشارات الأقمار الصناعية. تقوم هذه المحطة بحساب الأخطاء الموجودة في إشارات GPS التقليدية، وتحديدًا الأخطاء الناجمة عن الظروف الجوية وعدم دقة ساعات الأقمار الصناعية. بعد حساب هذه الأخطاء، تُرسل بيانات التصحيح إلى مستقبلات GPS القريبة عبر إشارات راديوية أو الإنترنت، حيث تُطبق المستقبلات هذه التصحيحات لتقليل الأخطاء وتحسين دقة تحديد الموقع.",
+    "required_facts": [
+      "محطة الإشارة الأرضية في موقع معروف تستقبل إشارات GPS.",
+      "المحطة تحسب الأخطاء الناجمة عن الظروف الجوية وعدم دقة ساعات الأقمار الصناعية.",
+      "بيانات التصحيح تُنقل إلى مستقبلات GPS القريبة لتطبيقها وتحسين دقة الموقع."
+    ],
+    "reference_contexts": [
+      "How GPS works? (cont.)\nTrilateration\n\nHow GPS works? (cont.)\nTrilateration\n\nHow GPS works? (cont.)\nTrilateration\n\nHow GPS works? (cont.)\nTrilateration\n\nHow GPS works? (cont.)\nDifferential GPS (DGPS)\nA technique to improve the accuracy of standard GPS signals\nby using correction data from fixed reference stations.\nHow It Works:\n• A ground-based reference station at a known location\nreceives GPS signals.\n• The station calculates errors in GPS signals caused by\natmospheric conditions and satellite clock inaccuracies.\n• The correction data is transmitted to nearby GPS\nreceivers via radio signals or the internet.\n• GPS receivers apply the corrections to refine their\npositioning accuracy."
+    ],
+    "reference_page_numbers": [
+      7
+    ],
+    "reference_chunk_ids": [
+      "73482c7e-b5bc-495f-92c2-ef306da8d5dd"
+    ],
+    "cross_lingual": true,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:21:05.782433+00:00",
+    "source_language": "en",
+    "question_language": "ar"
+  },
+  {
+    "test_case_id": "TC-026",
+    "document_id": "6be74837-9a43-44ff-bba2-eebaeeb10823",
+    "document_filename": "Document 3 Advanced.pdf",
+    "document_hash": "1739e0672142983fd4b931c6625eebda645a0b193937f9fff0e445a083b9c8e3",
+    "question": "How do the civilian positioning accuracies compare among GPS, GLONASS, Galileo, and BeiDou, and how many operational satellites does each system have?",
+    "language": "en",
+    "category": "multi_chunk",
+    "difficulty": "medium",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "GPS (USA) has about 31 operational satellites (out of a nominal 24) and provides civilian positioning accuracy of roughly 5 meters, which can be improved with WAAS/EGNOS. GLONASS (Russia) operates 24 satellites and offers civilian accuracy of about 5–10 meters. Galileo (EU) has 28 operational satellites and can achieve civilian accuracy of less than 1 meter when using its High Accuracy Service. BeiDou (China) has more than 30 operational satellites and delivers civilian accuracy of about 2.5–5 meters globally, with sub‑meter accuracy in regional BDS‑3 coverage.",
+    "required_facts": [
+      "GPS: 31 operational satellites, civilian accuracy ~5 m (better with WAAS/EGNOS).",
+      "GLONASS: 24 operational satellites, civilian accuracy ~5–10 m.",
+      "Galileo: 28 operational satellites, civilian accuracy <1 m with High Accuracy Service.",
+      "BeiDou: >30 operational satellites, civilian accuracy ~2.5–5 m globally (<1 m regionally)."
+    ],
+    "reference_contexts": [
+      "GNSSs Comparison\nFeature\nGPS (USA)\nGLONASS (Russia)\nGalileo (EU)\nBeiDou (China)\nOrbit Type\nMEO (20,200 km)\nMEO (19,100 km)\nMEO (23,222 km)\nMEO + IGSO + GEO\nNo. of Satellites\n(Nominal)\n24 (31 operational as\nof 2024)\n24 (24 operational)\n24 (28 operational)\n35 (30+ operational)\nOrbital Planes\n6\n3\n3\n3 MEO + IGSO (5) +\nGEO (3)\nOrbital Inclination\n55°\n64.8°\n56°\n~55° MEO, IGSO at\n55°\n• Satellite Constellation",
+      "GNSSs Comparison\nFeature\nGPS\nGLONASS\nGalileo\nBeiDou\nCivilian Accuracy\n~5 m (better with\nWAAS/EGNOS)\n~5–10 m\n<1 m (with High\nAccuracy Service)\n~2.5–5 m (global), <1\nm (regional BDS-3)\nMilitary Accuracy\n<1 m\n<1 m\nN/A (civilian use)\n<1 m\nDual-Frequency\nSupport\nYes\nYes\nYes\nYes\nHigh-Precision\nServices\nYes (with\naugmentation)\nYes (with\naugmentation)\nYes (HAS, PPP, OS-\nNMA)\nYes (PPP, RTK via\nBDS-3)\n• Positioning Accuracy"
+    ],
+    "reference_page_numbers": [
+      14,
+      16
+    ],
+    "reference_chunk_ids": [
+      "fd7da736-0a4d-4082-a9f0-886168a9e660",
+      "79a25218-5cce-43bd-8090-8e53cd5881c3"
+    ],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:21:37.569778+00:00",
+    "source_language": "en",
+    "question_language": "en"
+  },
+  {
+    "test_case_id": "TC-027",
+    "document_id": "6be74837-9a43-44ff-bba2-eebaeeb10823",
+    "document_filename": "Document 3 Advanced.pdf",
+    "document_hash": "1739e0672142983fd4b931c6625eebda645a0b193937f9fff0e445a083b9c8e3",
+    "question": "Which global navigation satellite system provides the best civilian positioning accuracy, and how does its orbital configuration and number of operational satellites compare to the system with the largest nominal satellite count?",
+    "language": "en",
+    "category": "multi_chunk",
+    "difficulty": "hard",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "The Galileo system (EU) provides the best civilian positioning accuracy, achieving less than 1 meter when the High Accuracy Service is used. Galileo uses a medium Earth orbit (MEO) at an altitude of 23,222 km, has three orbital planes with an inclination of 56°, and operates a nominal constellation of 24 satellites, of which 28 are operational as of 2024. In contrast, the system with the largest nominal satellite count is BeiDou (China), which has a mixed constellation of MEO, inclined geosynchronous orbit (IGSO), and geostationary orbit (GEO) satellites (MEO + IGSO (5) + GEO (3)). BeiDou’s nominal constellation consists of 35 satellites, with more than 30 operational satellites.",
+    "required_facts": [
+      "Galileo civilian accuracy is <1 m with High Accuracy Service.",
+      "Galileo orbital type is MEO (23,222 km), 3 orbital planes, inclination 56°, 28 operational satellites.",
+      "BeiDou has the largest nominal satellite count (35) with a mixed MEO+IGSO+GEO constellation and over 30 operational satellites."
+    ],
+    "reference_contexts": [
+      "GNSSs Comparison\nFeature\nGPS (USA)\nGLONASS (Russia)\nGalileo (EU)\nBeiDou (China)\nOrbit Type\nMEO (20,200 km)\nMEO (19,100 km)\nMEO (23,222 km)\nMEO + IGSO + GEO\nNo. of Satellites\n(Nominal)\n24 (31 operational as\nof 2024)\n24 (24 operational)\n24 (28 operational)\n35 (30+ operational)\nOrbital Planes\n6\n3\n3\n3 MEO + IGSO (5) +\nGEO (3)\nOrbital Inclination\n55°\n64.8°\n56°\n~55° MEO, IGSO at\n55°\n• Satellite Constellation",
+      "GNSSs Comparison\nFeature\nGPS\nGLONASS\nGalileo\nBeiDou\nCivilian Accuracy\n~5 m (better with\nWAAS/EGNOS)\n~5–10 m\n<1 m (with High\nAccuracy Service)\n~2.5–5 m (global), <1\nm (regional BDS-3)\nMilitary Accuracy\n<1 m\n<1 m\nN/A (civilian use)\n<1 m\nDual-Frequency\nSupport\nYes\nYes\nYes\nYes\nHigh-Precision\nServices\nYes (with\naugmentation)\nYes (with\naugmentation)\nYes (HAS, PPP, OS-\nNMA)\nYes (PPP, RTK via\nBDS-3)\n• Positioning Accuracy"
+    ],
+    "reference_page_numbers": [
+      14,
+      16
+    ],
+    "reference_chunk_ids": [
+      "fd7da736-0a4d-4082-a9f0-886168a9e660",
+      "79a25218-5cce-43bd-8090-8e53cd5881c3"
+    ],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:22:30.951054+00:00",
+    "source_language": "en",
+    "question_language": "en"
+  },
+  {
+    "test_case_id": "TC-028",
+    "document_id": "6be74837-9a43-44ff-bba2-eebaeeb10823",
+    "document_filename": "Document 3 Advanced.pdf",
+    "document_hash": "1739e0672142983fd4b931c6625eebda645a0b193937f9fff0e445a083b9c8e3",
+    "question": "What are the differences in the frequency bands used by GPS and GLONASS?",
+    "language": "en",
+    "category": "comparison",
+    "difficulty": "medium",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "GPS operates on three main frequency bands: L1 at 1575.42 MHz, L2 at 1227.60 MHz, and L5 at 1176.45 MHz. GLONASS, on the other hand, uses L1 at 1602 MHz, L2 at 1246 MHz, and L3 at 1202 MHz. Thus, each system employs distinct carrier frequencies for its L‑band signals.",
+    "required_facts": [
+      "GPS frequency bands: L1 1575.42 MHz, L2 1227.60 MHz, L5 1176.45 MHz",
+      "GLONASS frequency bands: L1 1602 MHz, L2 1246 MHz, L3 1202 MHz"
+    ],
+    "reference_contexts": [
+      "GNSSs Comparison\nGPS\nGLONASS\nGalileo\nBeiDou\nFrequency Bands\nL1 (1575.42 MHz), L2\n(1227.60 MHz), L5\n(1176.45 MHz)\nL1 (1602 MHz), L2\n(1246 MHz), L3 (1202\nMHz)\nE1 (1575.42 MHz),\nE5a (1176.45 MHz),\nE5b (1207.14 MHz),\nE6 (1278.75 MHz)\nB1I (1561.098 MHz),\nB1C (1575.42 MHz),\nB2a (1176.45 MHz),\nB2b (1207.14 MHz),\nB3\nSignal Modulation\nCDMA\nFDMA (legacy),\nCDMA (modernized)\nCDMA\nCDMA\nInteroperability\nHigh with Galileo,\nBeiDou\nLimited\nDesigned for\ninteroperability\nInteroperable with\nGPS/Galileo\n• Frequency Bands and Signals"
+    ],
+    "reference_page_numbers": [
+      15
+    ],
+    "reference_chunk_ids": [
+      "455886e0-bd41-44ae-8de2-497d39e01be0"
+    ],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:26:25.075966+00:00",
+    "source_language": "en",
+    "question_language": "en"
+  },
+  {
+    "test_case_id": "TC-029",
+    "document_id": "6be74837-9a43-44ff-bba2-eebaeeb10823",
+    "document_filename": "Document 3 Advanced.pdf",
+    "document_hash": "1739e0672142983fd4b931c6625eebda645a0b193937f9fff0e445a083b9c8e3",
+    "question": "What are the launch years for GPS, GLONASS, Galileo, and BeiDou, and which of these systems reached full operational status most recently?",
+    "language": "en",
+    "category": "summary",
+    "difficulty": "medium",
+    "answerable": true,
+    "expected_behavior": "answer",
+    "reference_answer": "According to the table, GPS was first launched in 1978, GLONASS in 1982, Galileo in 2011 (with full operational capability achieved in 2016), and BeiDou in 2000 (with the BDS‑3 version becoming operational in 2020). The most recent full operational status among them is BeiDou, which reached it in 2020.",
+    "required_facts": [
+      "GPS first launch year: 1978",
+      "GLONASS first launch year: 1982",
+      "Galileo first launch year: 2011 and full ops in 2016",
+      "BeiDou first launch year: 2000 and BDS‑3 full ops in 2020"
+    ],
+    "reference_contexts": [
+      "How GPS works? (cont.)\nDifferential GPS (DGPS)\nAccuracy Improvement:\n• Reduces errors from ~3-5 meters to sub-meter or even centimeter-level accuracy\n\nGNSSs Comparison\nFeature\nGPS (USA)\nGLONASS (Russia)\nGalileo (EU)\nBeiDou (China)\nOfficial Name\nGlobal Positioning\nSystem\nGlobalnaya\nNavigatsionnaya\nSputnikovaya Sistema\nGalileo\nBeiDou Navigation\nSatellite System (BDS)\nOperator\nUS Space Force\nRussian Aerospace\nForces\nEuropean Union\nAgency for the Space\nProgramme (EUSPA)\nChina Satellite\nNavigation Office\nFirst Launch\n1978\n1982\n2011 (Full Ops: 2016)\n2000 (BDS-3: 2020)\nGlobal Coverage\nYes\nYes\nYes\nYes\n• System Overview"
+    ],
+    "reference_page_numbers": [
+      12
+    ],
+    "reference_chunk_ids": [
+      "911c30eb-ff0b-45d6-992e-b7bb87b107ff"
+    ],
+    "cross_lingual": false,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:28:01.611797+00:00",
+    "source_language": "en",
+    "question_language": "en"
+  },
+  {
+    "test_case_id": "TC-030",
+    "document_id": "6be74837-9a43-44ff-bba2-eebaeeb10823",
+    "document_filename": "Document 3 Advanced.pdf",
+    "document_hash": "1739e0672142983fd4b931c6625eebda645a0b193937f9fff0e445a083b9c8e3",
+    "question": "ما هو متوسط عدد الأقمار الصناعية التي تكون في مدار نظام GPS في أي لحظة؟",
+    "language": "ar",
+    "category": "unanswerable",
+    "difficulty": "easy",
+    "answerable": false,
+    "expected_behavior": "fallback",
+    "reference_answer": null,
+    "required_facts": [],
+    "reference_contexts": [],
+    "reference_page_numbers": [],
+    "reference_chunk_ids": [],
+    "cross_lingual": true,
+    "review_status": "pending",
+    "generation_notes": "Generated on 2026-07-14T03:28:08.504002+00:00",
+    "unanswerable_rationale": "The snippet provides details on DGPS accuracy improvement, launch years, operators, and global coverage for GPS and other GNSS, but it does not include any information about the current number of satellites in the GPS constellation. Therefore, the answer cannot be found in the provided context.",
+    "source_language": "en",
+    "question_language": "ar"
+  }
+]

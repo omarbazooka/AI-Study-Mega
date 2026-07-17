@@ -1,13 +1,42 @@
 import os
 
 # ------------------------------------------------------------------
-# Fallback Messages
+# Fallback Messages (Bilingual Taxonomy)
 # ------------------------------------------------------------------
-# The only allowed fallback message when context is insufficient.
 FALLBACK_MESSAGE = os.getenv(
     "FALLBACK_MESSAGE",
     "لم أجد إجابة واضحة في الملف المرفوع."
 )
+
+FALLBACK_REASON_MESSAGES_AR = {
+    "DOCUMENT_INFORMATION_NOT_FOUND": "لم أجد في الملف المرفوع معلومات كافية للإجابة عن هذا السؤال.",
+    "PARTIAL_DOCUMENT_EVIDENCE": "وجدت في الملف معلومات جزئية عن سؤالك، وسأوضح الجزء المدعوم فقط.",
+    "CLARIFICATION_REQUIRED": "السؤال محتاج توضيح بسيط قبل ما أقدر أبحث داخل الملف بدقة.",
+    "DOCUMENT_NOT_READY": "المستند ما زال قيد المعالجة حالياً. يرجى الانتظار قليلاً أو المحاولة مرة أخرى لاحقاً.",
+    "RETRIEVAL_TEMPORARILY_UNAVAILABLE": "تعذر البحث داخل الملف مؤقتًا. حاول مرة أخرى بعد لحظات.",
+    "GENERATION_TEMPORARILY_UNAVAILABLE": "تم العثور على محتوى مرتبط داخل الملف، لكن تعذر إنشاء الإجابة مؤقتًا.",
+    "VERIFICATION_FAILED": "تعذر التحقق من الإجابة بشكل صحيح.",
+    "CITATION_REBUILD_FAILED": "تعذر بناء التوثيقات الصحيحة للإجابة.",
+    "INTERNAL_PIPELINE_ERROR": "حدث خطأ داخلي أثناء معالجة طلبك."
+}
+
+FALLBACK_REASON_MESSAGES_EN = {
+    "DOCUMENT_INFORMATION_NOT_FOUND": "I could not find sufficient information in the uploaded document to answer this question.",
+    "PARTIAL_DOCUMENT_EVIDENCE": "I found partial information in the document regarding your question, and I will only explain the supported part.",
+    "CLARIFICATION_REQUIRED": "The question needs a simple clarification before I can search the document accurately.",
+    "DOCUMENT_NOT_READY": "The document is still processing. Please wait a moment or try again later.",
+    "RETRIEVAL_TEMPORARILY_UNAVAILABLE": "Searching the document is temporarily unavailable. Please try again in a few moments.",
+    "GENERATION_TEMPORARILY_UNAVAILABLE": "Related content was found in the document, but the answer could not be generated temporarily.",
+    "VERIFICATION_FAILED": "Could not verify the answer correctly.",
+    "CITATION_REBUILD_FAILED": "Could not build correct citations for the answer.",
+    "INTERNAL_PIPELINE_ERROR": "An internal error occurred while processing your request."
+}
+
+def get_fallback_message(reason_code: str, lang: str = "ar") -> str:
+    """Helper to retrieve bilingual fallback message by reason code."""
+    if lang == "ar":
+        return FALLBACK_REASON_MESSAGES_AR.get(reason_code, FALLBACK_REASON_MESSAGES_AR["DOCUMENT_INFORMATION_NOT_FOUND"])
+    return FALLBACK_REASON_MESSAGES_EN.get(reason_code, FALLBACK_REASON_MESSAGES_EN["DOCUMENT_INFORMATION_NOT_FOUND"])
 
 # ------------------------------------------------------------------
 # Input Limits
@@ -121,3 +150,42 @@ MAX_VERIFICATION_RETRIES = int(os.getenv("MAX_VERIFICATION_RETRIES", "3"))
 THRESHOLD_FACTUAL_QA = float(os.getenv("THRESHOLD_FACTUAL_QA", "0.70"))
 THRESHOLD_FACTUAL_QA_SPECIFIC = float(os.getenv("THRESHOLD_FACTUAL_QA_SPECIFIC", "0.75"))
 THRESHOLD_DEFAULT = float(os.getenv("THRESHOLD_DEFAULT", "0.60"))
+
+# Centralized task-aware evidence profiles (Section 9)
+EVIDENCE_PROFILES = {
+    "direct_factual": {
+        "min_top_score": 0.50,
+        "min_usable_chunks": 1,
+        "require_multiple_pages": False
+    },
+    "explanation": {
+        "min_top_score": 0.40,
+        "min_usable_chunks": 1,
+        "require_multiple_pages": False
+    },
+    "comparison": {
+        "min_top_score": 0.35,
+        "min_usable_chunks": 2,
+        "require_multiple_pages": True
+    },
+    "multi_chunk": {
+        "min_top_score": 0.35,
+        "min_usable_chunks": 2,
+        "require_multiple_pages": False
+    },
+    "summary": {
+        "min_top_score": 0.30,
+        "min_usable_chunks": 2,
+        "require_multiple_pages": True
+    },
+    "quiz": {
+        "min_top_score": 0.40,
+        "min_usable_chunks": 2,
+        "require_multiple_pages": False
+    },
+    "answer_evaluation": {
+        "min_top_score": 0.40,
+        "min_usable_chunks": 1,
+        "require_multiple_pages": False
+    }
+}

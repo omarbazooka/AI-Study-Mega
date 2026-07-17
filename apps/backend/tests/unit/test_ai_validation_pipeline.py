@@ -256,3 +256,44 @@ async def test_document_comparison_evidence_sufficiency():
         query="مقارنة بين القسمين"
     )
     assert res_sufficient.evidence_status == EvidenceStatus.sufficient
+
+@pytest.mark.asyncio
+async def test_jina_normalization_out_of_calibration_bounds():
+    # Out of calibration bounds: very high or very low raw Jina score should saturate at 1.0 or 0.0
+    from app.ai_system.validation.evidence_gate import _normalize_score
+    
+    # 0.70 is above JINA_MAX (0.55), should map to 1.0
+    assert _normalize_score(0.70, "jina") == 1.0
+    
+    # -0.80 is below JINA_MIN (-0.50), should map to 0.0
+    assert _normalize_score(-0.80, "jina") == 0.0
+
+@pytest.mark.asyncio
+async def test_double_normalization_prevention():
+    # Non-Jina providers (e.g. hybrid or cohere) should never be normalized as Jina
+    from app.ai_system.validation.evidence_gate import _extract_provider_score
+    
+    # Cosine/hybrid score of 0.45 under "hybrid" provider metadata must remain 0.45
+    chunk = RetrievedChunk(
+        chunk_id="c1",
+        text="Test info",
+        similarity_score=0.45,
+        metadata={"active_reranker_provider": "hybrid", "provider_relevance_score": 0.45}
+    )
+    score, provider = _extract_provider_score(chunk)
+    assert score == 0.45
+    assert provider == "hybrid"
+
+@pytest.mark.asyncio
+async def test_score_preservation_for_hybrid_provider():
+    # Verify that a high similarity score is preserved as-is
+    from app.ai_system.validation.evidence_gate import _extract_provider_score
+    chunk = RetrievedChunk(
+        chunk_id="c1",
+        text="High score info",
+        similarity_score=0.85,
+        metadata={"active_reranker_provider": "cohere", "provider_relevance_score": 0.85}
+    )
+    score, provider = _extract_provider_score(chunk)
+    assert score == 0.85
+    assert provider == "cohere"

@@ -92,7 +92,8 @@ class GenerationService:
         fallback_models: list = None,
         reasoning_effort: str = "medium",
         fallback_level: int = 0,
-        attempt: int = 1
+        attempt: int = 1,
+        max_tokens: Optional[int] = None
     ) -> dict:
         """Executes LLM generation with automatic key failover and rate-limit recovery."""
         retries = 0
@@ -103,24 +104,30 @@ class GenerationService:
             # Fetch next active key in pool using round-robin
             key: APIKey = api_key_pool.get_available_key(key_group)
         except AllKeysExhaustedException as e:
-            logger.error(f"Failed to execute task key retrieval: {e}")
-            if fallback_level < len(fallbacks):
-                next_model = fallbacks[fallback_level]
-                logger.warning(f"Key group '{key_group}' exhausted. Falling back to model '{next_model}'...")
-                return await self._execute_with_failover(
-                    task_type=task_type,
-                    model_name=next_model,
-                    key_group=key_group,
-                    prompt=prompt,
-                    system_prompt=system_prompt,
-                    json_mode=json_mode,
-                    temperature=temperature,
-                    fallback_models=fallbacks,
-                    reasoning_effort=reasoning_effort,
-                    fallback_level=fallback_level + 1,
-                    attempt=1
-                )
-            raise e
+            logger.warning(f"All keys exhausted for group '{key_group}'. Sleeping for 3s to let cooldowns expire...")
+            await asyncio.sleep(3.0)
+            try:
+                key: APIKey = api_key_pool.get_available_key(key_group)
+            except AllKeysExhaustedException:
+                logger.error(f"Failed to execute task key retrieval after sleep: {e}")
+                if fallback_level < len(fallbacks):
+                    next_model = fallbacks[fallback_level]
+                    logger.warning(f"Key group '{key_group}' exhausted. Falling back to model '{next_model}'...")
+                    return await self._execute_with_failover(
+                        task_type=task_type,
+                        model_name=next_model,
+                        key_group=key_group,
+                        prompt=prompt,
+                        system_prompt=system_prompt,
+                        json_mode=json_mode,
+                        temperature=temperature,
+                        fallback_models=fallbacks,
+                        reasoning_effort=reasoning_effort,
+                        fallback_level=fallback_level + 1,
+                        attempt=1,
+                        max_tokens=max_tokens
+                    )
+                raise e
 
         start_time = time.perf_counter()
         try:
@@ -133,7 +140,8 @@ class GenerationService:
                 json_mode=json_mode,
                 api_key=key.value,
                 profile=key_group.lower(),
-                reasoning_effort=reasoning_effort
+                reasoning_effort=reasoning_effort,
+                max_tokens=max_tokens
             )
             
             # Report successful call to clear any cooldowns
@@ -190,8 +198,22 @@ class GenerationService:
                 raise exc
 
         except (LLMRateLimitError, RateLimitException) as exc:
-            api_key_pool.report_rate_limit(key)
+            import re
+            cooldown_sec = None
+            msg = str(exc).lower()
+            match = re.search(r"try again in (\d+\.?\d*)s", msg)
+            if match:
+                cooldown_sec = int(float(match.group(1)) + 2) # add 2s buffer
+                logger.info(f"[COOLDOWN] Parsed rate-limit retry-after: {cooldown_sec} seconds")
+            
+            api_key_pool.report_rate_limit(key, cooldown_seconds=cooldown_sec)
             logger.warning(f"Rate limit hit on {key.alias} for model {model_name}. Transitioning through fallback chain.")
+            
+            # Wait for cooldown to avoid cascading exhaustion of fallback models
+            sleep_time = cooldown_sec or 4
+            logger.info(f"[RATE_LIMIT] Sleeping for {sleep_time}s before trying fallback...")
+            await asyncio.sleep(sleep_time)
+
             if fallback_level < len(fallbacks):
                 next_model = fallbacks[fallback_level]
                 return await self._execute_with_failover(

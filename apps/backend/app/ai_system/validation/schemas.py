@@ -67,6 +67,7 @@ class ResponseStrategy(str, Enum):
 
 class EvidenceStatus(str, Enum):
     sufficient = "sufficient"
+    weak = "weak"
     partial = "partial"
     insufficient = "insufficient"
     conflicting = "conflicting"
@@ -162,6 +163,7 @@ class RetrievedChunk(BaseModel):
     page_number: Optional[int] = None
     section_title: Optional[str] = None
     similarity_score: Optional[float] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ConfidenceLabel(str, Enum):

@@ -74,6 +74,10 @@ async def save_message(
     document_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """Saves a message (user or assistant) in PostgreSQL."""
+    import os
+    if os.getenv("EVALUATION_RUN") == "true":
+        return {}
+
     logger.info(f"[DB] Saving {role} message to session {session_id}")
     
     # Ensure session exists first

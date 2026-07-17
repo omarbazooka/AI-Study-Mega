@@ -1,0 +1,1 @@
+timestamp,user_id,document_id,task_type,provider,model,key_alias,input_tokens,output_tokens,total_tokens,latency_ms,status,error_type,prompt_version,estimated_cost_usd

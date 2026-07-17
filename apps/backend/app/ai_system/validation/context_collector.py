@@ -48,13 +48,16 @@ async def collect_context(
         chunks = []
         if res.status == RetrievalStatus.FOUND:
             for idx, c in enumerate(res.chunks):
+                # Use explicit None check — c.score can be legitimately 0.0 or negative (Jina)
+                raw_score = c.score if c.score is not None else (1.0 - 0.05 * idx)
                 chunks.append(RetrievedChunk(
                     chunk_id=c.chunk_id,
                     text=c.text,
                     document_id=document_id,
                     page_number=c.page_number or 1,
                     section_title=c.section_title or "Focused Retrieval",
-                    similarity_score=c.score or (1.0 - 0.05 * idx)
+                    similarity_score=raw_score,
+                    metadata=getattr(c, "metadata", {})
                 ))
         return chunks
 

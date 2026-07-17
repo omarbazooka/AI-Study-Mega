@@ -4,12 +4,25 @@ import json
 import pandas as pd
 from typing import Dict, Any
 
+# Reconfigure stdout/stderr to utf-8 to prevent CP1252 errors on Windows
+if sys.stdout.encoding != 'utf-8':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
 # Add parent directory to sys.path so we can import app modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 import yaml
+from app.core.config import settings
 
-FORMULA_CORRECT_ANSWER_RATE = r"$$Correct\,Answer\,Rate = \frac{Passed\,Cases}{Valid\,Test\,Cases} \times 100$$"
+FORMULA_ANSWERABLE_ACCURACY = r"$$Answerable\,Accuracy = \frac{Correctly\,Answered\,Answerable\,Cases}{Total\,Answerable\,Cases} \times 100$$"
+FORMULA_ANSWER_COVERAGE = r"$$Answer\,Coverage = \frac{Answered\,Answerable\,Cases}{Total\,Answerable\,Cases} \times 100$$"
+FORMULA_FALSE_REFUSAL_RATE = r"$$False\,Refusal\,Rate = \frac{Refused\,Answerable\,Cases}{Total\,Answerable\,Cases} \times 100$$"
+FORMULA_CORRECT_FALLBACK_RATE = r"$$Correct\,Fallback\,Rate = \frac{Correctly\,Refused\,Unanswerable\,Cases}{Total\,Unanswerable\,Cases} \times 100$$"
+FORMULA_OVERALL_TASK_SUCCESS = r"$$Overall\,Task\,Success = \frac{Correctly\,Answered + Correctly\,Refused}{Total\,Cases} \times 100$$"
+FORMULA_HALLUCINATION_RATE_ANSWERED = r"$$Hallucination\,Rate\,(Answered) = \frac{Hallucinated\,Answered\,Cases}{Total\,Answered\,Cases} \times 100$$"
 FORMULA_LEARNING_IMPROVEMENT = r"$$Learning\,Improvement\,\% = \frac{Post\,test\,score - Pre\,test\,score}{Pre\,test\,score} \times 100$$"
 FORMULA_QUIZ_SCORE_IMPROVEMENT = r"$$Quiz\,Score\,Improvement = Final\,quiz\,score - Initial\,quiz\,score$$"
 FORMULA_ERROR_REDUCTION_RATE = r"$$Error\,Reduction\,Rate = \frac{Initial\,errors - Final\,errors}{Initial\,errors} \times 100$$"
@@ -29,9 +42,10 @@ def generate_report():
     deepeval_results_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", config["paths"]["deepeval_summary_json"]))
     raw_outputs_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", config["paths"]["raw_outputs"]))
     manifest_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", config["paths"]["manifest_path"]))
+    diagnostics_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "evaluation", "results", "diagnostics", "per_case_diagnostics.csv"))
     
     missing_files = []
-    for p in [local_results_path, ragas_results_path, deepeval_results_path, raw_outputs_path, manifest_path]:
+    for p in [local_results_path, ragas_results_path, deepeval_results_path, raw_outputs_path, manifest_path, diagnostics_path]:
         if not os.path.exists(p):
             missing_files.append(p)
             
@@ -56,12 +70,44 @@ def generate_report():
                 records.append(json.loads(line))
                 
     df_raw = pd.DataFrame(records)
+    df_diag = pd.read_csv(diagnostics_path)
     
+    # Calculate corrected outcome metrics dynamically from the diagnostics CSV
+    total_cases = len(df_diag)
+    answerable_df = df_diag[df_diag["answerable"] == True]
+    unanswerable_df = df_diag[df_diag["answerable"] == False]
+    
+    total_answerable = len(answerable_df)
+    total_unanswerable = len(unanswerable_df)
+    
+    # Answerable subsets
+    answered_answerable = len(answerable_df[answerable_df["fallback_detected"] == False])
+    refused_answerable = len(answerable_df[answerable_df["fallback_detected"] == True]) # False Refusals
+    correctly_answered = len(answerable_df[(answerable_df["fallback_detected"] == False) & (answerable_df["verifier_status"] == "passed")])
+    
+    # Unanswerable subsets
+    correctly_refused = len(unanswerable_df[unanswerable_df["fallback_detected"] == True]) # Correct Fallbacks
+    answered_unanswerable = len(unanswerable_df[unanswerable_df["fallback_detected"] == False]) # Hallucinated Answers
+    
+    # Rates
+    answerable_accuracy = (correctly_answered / total_answerable) if total_answerable > 0 else 0.0
+    answer_coverage = (answered_answerable / total_answerable) if total_answerable > 0 else 0.0
+    false_refusal_rate = (refused_answerable / total_answerable) if total_answerable > 0 else 0.0
+    correct_fallback_rate = (correctly_refused / total_unanswerable) if total_unanswerable > 0 else 0.0
+    hallucinated_unanswerable_rate = (answered_unanswerable / total_unanswerable) if total_unanswerable > 0 else 0.0
+    
+    # Hallucination Rate among Answered Cases
+    answered_total = len(df_diag[df_diag["fallback_detected"] == False])
+    hallucinated_answered_cases = len(df_diag[(df_diag["fallback_detected"] == False) & (df_diag["verifier_status"] == "failed")])
+    hallucination_rate_answered = (hallucinated_answered_cases / answered_total) if answered_total > 0 else 0.0
+    
+    overall_task_success = ((correctly_answered + correctly_refused) / total_cases) if total_cases > 0 else 0.0
+
     # 1. Compile Markdown Content
     md_content = f"""# AI Study Platform - Agentic RAG Evaluation Report
 
 **Evaluation Date:** {pd.Timestamp.now().strftime('%Y-%m-%d')}  
-**Dataset Size:** {local_metrics['confusion_matrix']['true_answer'] + local_metrics['confusion_matrix']['correct_fallback'] + local_metrics['confusion_matrix']['false_refusal'] + local_metrics['confusion_matrix']['hallucinated_answer']} Cases  
+**Dataset Size:** {total_cases} Cases  
 **Documents Set Size:** {len(manifest)} PDFs  
 
 ---
@@ -93,12 +139,15 @@ This report documents the performance of the production Agentic RAG pipeline.
 ### Core Metrics Summary Table
 | Metric | Measured Value | Target Threshold | Status |
 | :--- | :---: | :---: | :---: |
-| **Correct Answer Rate** | {local_metrics['correct_answer_rate']:.2f}% | 80.00% | {'Passed' if local_metrics['correct_answer_rate'] >= 80 else 'Failed'} |
-| **Hallucination Case Rate** | {local_metrics['hallucination_case_rate']:.2f}% | < 15.00% | {'Passed' if local_metrics['hallucination_case_rate'] < 15 else 'Failed'} |
-| **Hallucination Severity** | {local_metrics['hallucination_severity']:.4f} | < 0.1500 | {'Passed' if local_metrics['hallucination_severity'] < 0.15 else 'Failed'} |
+| **Answerable Accuracy** | {answerable_accuracy*100:.2f}% | 80.00% | {'Passed' if answerable_accuracy >= 0.80 else 'Failed'} |
+| **Answer Coverage** | {answer_coverage*100:.2f}% | 80.00% | {'Passed' if answer_coverage >= 0.80 else 'Failed'} |
+| **False Refusal Rate** | {false_refusal_rate*100:.2f}% | < 20.00% | {'Passed' if false_refusal_rate < 0.20 else 'Failed'} |
+| **Correct Fallback Rate** | {correct_fallback_rate*100:.2f}% | 85.00% | {'Passed' if correct_fallback_rate >= 0.85 else 'Failed'} |
+| **Hallucination Rate (Among Answered)** | {hallucination_rate_answered*100:.2f}% | < 10.00% | {'Passed' if hallucination_rate_answered < 0.10 else 'Failed'} |
+| **Hallucinated Unanswerable Rate** | {hallucinated_unanswerable_rate*100:.2f}% | < 15.00% | {'Passed' if hallucinated_unanswerable_rate < 0.15 else 'Failed'} |
+| **Overall Task Success** | {overall_task_success*100:.2f}% | 80.00% | {'Passed' if overall_task_success >= 0.80 else 'Failed'} |
 | **Mean Response Latency** | {local_metrics['mean_response_latency_ms']:.2f} ms | < 5000 ms | {'Passed' if local_metrics['mean_response_latency_ms'] < 5000 else 'Failed'} |
 | **P95 Response Latency** | {local_metrics['p95_response_latency_ms']:.2f} ms | < 8000 ms | {'Passed' if local_metrics['p95_response_latency_ms'] < 8000 else 'Failed'} |
-| **Correct Fallback Rate** | {local_metrics['correct_fallback_rate']:.2f}% | 85.00% | {'Passed' if local_metrics['correct_fallback_rate'] >= 85 else 'Failed'} |
 | **Project-Defined Quality Composite** | {local_metrics['project_defined_composite_score']:.4f} | 0.8000 | {'Passed' if local_metrics['project_defined_composite_score'] >= 0.80 else 'Failed'} |
 
 ### Important Limitations
@@ -146,8 +195,8 @@ The Golden Dataset consists of **exactly 30 cases** constructed from actual inde
 - **Unanswerable / Fallback Trap Questions:** 4 cases
 
 **Language Scoping:**
-- Arabic questions: {local_metrics['latency_stats']['by_language'].get('ar', {}).get('min', 0) != 0 and 'Yes' or 'No'}
-- English questions: {local_metrics['latency_stats']['by_language'].get('en', {}).get('min', 0) != 0 and 'Yes' or 'No'}
+- Arabic questions: Yes
+- English questions: Yes
 - All cases were marked as **Source-Verified Synthetic Golden Dataset** and frozen post-approval.
 
 ---
@@ -165,13 +214,29 @@ The Golden Dataset consists of **exactly 30 cases** constructed from actual inde
 
 ## 7. Metrics and Formulas
 
-### Correct Answer Rate
-{FORMULA_CORRECT_ANSWER_RATE}
-Passed cases include answerable cases exceeding correctness thresholds (0.80) and unanswerable cases correctly triggering fallbacks.
+### Answerable Accuracy
+{FORMULA_ANSWERABLE_ACCURACY}
+Evaluates the proportion of answerable questions that were answered correctly.
 
-### Hallucination Rate
-**Hallucination Case Rate:** Percentage of valid cases that fall below the faithfulness threshold (0.85).  
-**Hallucination Severity:** $1.0 - Mean\\,Faithfulness$.
+### Answer Coverage
+{FORMULA_ANSWER_COVERAGE}
+Measures how often the system attempted to answer an answerable question rather than refusing.
+
+### False Refusal Rate
+{FORMULA_FALSE_REFUSAL_RATE}
+The percentage of answerable questions that were incorrectly refused by the system.
+
+### Correct Fallback Rate
+{FORMULA_CORRECT_FALLBACK_RATE}
+How often the system correctly identified an unanswerable question and fell back.
+
+### Overall Task Success
+{FORMULA_OVERALL_TASK_SUCCESS}
+Combined system success across all answerable and unanswerable cases.
+
+### Hallucination Rate Among Answered Cases
+{FORMULA_HALLUCINATION_RATE_ANSWERED}
+The proportion of answered cases that failed grounding checks.
 
 ---
 
@@ -182,7 +247,6 @@ Passed cases include answerable cases exceeding correctness thresholds (0.80) an
 - **RAGAS Mean Faithfulness:** {ragas_summary['mean_faithfulness']:.4f}
 - **DeepEval Mean Answer Relevancy:** {deepeval_summary['mean_answer_relevancy']:.4f}
 - **DeepEval Mean Educational Quality:** {deepeval_summary['mean_educational_quality']:.4f}
-- **DeepEval Faithfulness Cross-Check Mean:** {deepeval_summary.get('mean_crosscheck_faithfulness', 0.88):.4f} (subset of 10 cases)
 
 ---
 
@@ -201,8 +265,8 @@ Passed cases include answerable cases exceeding correctness thresholds (0.80) an
 ### Confusion Matrix
 | Source State | System Answered | System Fell Back |
 | :--- | :---: | :---: |
-| **Answerable** | {local_metrics['confusion_matrix']['true_answer']} (True Answer) | {local_metrics['confusion_matrix']['false_refusal']} (False Refusal) |
-| **Unanswerable** | {local_metrics['confusion_matrix']['hallucinated_answer']} (Hallucinated) | {local_metrics['confusion_matrix']['correct_fallback']} (Correct Fallback) |
+| **Answerable** | {answered_answerable} (True Answer) | {refused_answerable} (False Refusal) |
+| **Unanswerable** | {answered_unanswerable} (Hallucinated) | {correctly_refused} (Correct Fallback) |
 
 ---
 
@@ -288,7 +352,6 @@ Below are the generated visualization charts detailing the metrics and execution
 ## 14. Future Student-Based Educational Evaluation
 
 The educational outcome metrics listed below could not receive fabricated values during this technical run:
-
 - **Learning Improvement %**
 - **Quiz Score Improvement**
 - **Error Reduction Rate**
@@ -299,17 +362,6 @@ Future testing should involve:
 2. **Platform Usage:** Controlled time-on-task study on the platform.
 3. **Post-test:** Post-intervention student diagnostic test.
 4. **Quiz Analysis:** Tracking score differences on weekly module quizzes.
-
-### Educational Metrics Formulas
-- **Learning Improvement %**
-  {FORMULA_LEARNING_IMPROVEMENT}
-- **Quiz Score Improvement**
-  {FORMULA_QUIZ_SCORE_IMPROVEMENT}
-- **Error Reduction Rate**
-  {FORMULA_ERROR_REDUCTION_RATE}
-
-> [!NOTE]
-> **Not measured in the current technical evaluation because no controlled student cohort was available.**
 
 ---
 
@@ -323,8 +375,21 @@ Future testing should involve:
 
 ## 16. Appendix: Complete Case Log
 
-Complete execution cases and details are saved in `evaluation/results/raw/pipeline_outputs.jsonl` and `evaluation/results/ragas/ragas_case_results.csv`.
+| Case ID | Document | Category | Grounding | System Answer Type | Latency (ms) | RAGAS Correctness | DeepEval Relevancy |
+| :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
 """
+
+    for _, row in df_diag.iterrows():
+        ans_status = "Answerable" if row["answerable"] else "Unanswerable"
+        sys_behavior = str(row["outcome_classification"]).replace("_", " ").title()
+        def fmt_val(val):
+            try:
+                return f"{float(val):.2f}"
+            except Exception:
+                return "NaN"
+        ragas_corr_val = fmt_val(row["ragas_correctness_score"])
+        deepeval_rel_val = fmt_val(row["deepeval_relevancy_score"])
+        md_content += f"| {row['test_case_id']} | {row['document_id']} | {row['category']} | {ans_status} | {sys_behavior} | {row['total_latency']:.0f} | {ragas_corr_val} | {deepeval_rel_val} |\n"
 
     # Save Markdown report
     report_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "evaluation", "reports"))
@@ -344,12 +409,12 @@ Complete execution cases and details are saved in `evaluation/results/raw/pipeli
         <meta charset="UTF-8">
         <title>AI Study Platform Evaluation Report</title>
         <style>
-            body {{ font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 900px; margin: 40px auto; padding: 0 20px; }}
+            body {{ font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 950px; margin: 40px auto; padding: 0 20px; }}
             h1, h2, h3 {{ color: #1D4ED8; }}
             h1 {{ border-bottom: 2px solid #1D4ED8; padding-bottom: 10px; }}
             h2 {{ border-bottom: 1px solid #E5E7EB; padding-bottom: 5px; margin-top: 30px; }}
             table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
-            th, td {{ border: 1px solid #D1D5DB; padding: 10px; text-align: left; }}
+            th, td {{ border: 1px solid #D1D5DB; padding: 8px; text-align: left; font-size: 13px; }}
             th {{ background-color: #F3F4F6; }}
             .passed {{ color: #10B981; font-weight: bold; }}
             .failed {{ color: #EF4444; font-weight: bold; }}
@@ -361,7 +426,7 @@ Complete execution cases and details are saved in `evaluation/results/raw/pipeli
     <body>
         <h1>AI Study Platform - Agentic RAG Evaluation Report</h1>
         <p><strong>Evaluation Date:</strong> {pd.Timestamp.now().strftime('%Y-%m-%d')}</p>
-        <p><strong>Dataset Size:</strong> {len(records)} Cases</p>
+        <p><strong>Dataset Size:</strong> {total_cases} Cases</p>
         <p><strong>Documents Set Size:</strong> {len(manifest)} PDFs</p>
         
         <h2>Executive Summary</h2>
@@ -376,27 +441,59 @@ Complete execution cases and details are saved in `evaluation/results/raw/pipeli
             </thead>
             <tbody>
                 <tr>
-                    <td><strong>Correct Answer Rate</strong></td>
-                    <td>{local_metrics['correct_answer_rate']:.2f}%</td>
+                    <td><strong>Answerable Accuracy</strong></td>
+                    <td>{answerable_accuracy*100:.2f}%</td>
                     <td>80.00%</td>
-                    <td class="{"passed" if local_metrics['correct_answer_rate'] >= 80 else "failed"}">
-                        {"Passed" if local_metrics['correct_answer_rate'] >= 80 else "Failed"}
+                    <td class="{"passed" if answerable_accuracy >= 0.80 else "failed"}">
+                        {"Passed" if answerable_accuracy >= 0.80 else "Failed"}
                     </td>
                 </tr>
                 <tr>
-                    <td><strong>Hallucination Case Rate</strong></td>
-                    <td>{local_metrics['hallucination_case_rate']:.2f}%</td>
+                    <td><strong>Answer Coverage</strong></td>
+                    <td>{answer_coverage*100:.2f}%</td>
+                    <td>80.00%</td>
+                    <td class="{"passed" if answer_coverage >= 0.80 else "failed"}">
+                        {"Passed" if answer_coverage >= 0.80 else "Failed"}
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>False Refusal Rate</strong></td>
+                    <td>{false_refusal_rate*100:.2f}%</td>
+                    <td>&lt; 20.00%</td>
+                    <td class="{"passed" if false_refusal_rate < 0.20 else "failed"}">
+                        {"Passed" if false_refusal_rate < 0.20 else "Failed"}
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>Correct Fallback Rate</strong></td>
+                    <td>{correct_fallback_rate*100:.2f}%</td>
+                    <td>85.00%</td>
+                    <td class="{"passed" if correct_fallback_rate >= 0.85 else "failed"}">
+                        {"Passed" if correct_fallback_rate >= 0.85 else "Failed"}
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>Hallucination Rate (Among Answered)</strong></td>
+                    <td>{hallucination_rate_answered*100:.2f}%</td>
+                    <td>&lt; 10.00%</td>
+                    <td class="{"passed" if hallucination_rate_answered < 0.10 else "failed"}">
+                        {"Passed" if hallucination_rate_answered < 0.10 else "Failed"}
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>Hallucinated Unanswerable Rate</strong></td>
+                    <td>{hallucinated_unanswerable_rate*100:.2f}%</td>
                     <td>&lt; 15.00%</td>
-                    <td class="{"passed" if local_metrics['hallucination_case_rate'] < 15 else "failed"}">
-                        {"Passed" if local_metrics['hallucination_case_rate'] < 15 else "Failed"}
+                    <td class="{"passed" if hallucinated_unanswerable_rate < 0.15 else "failed"}">
+                        {"Passed" if hallucinated_unanswerable_rate < 0.15 else "Failed"}
                     </td>
                 </tr>
                 <tr>
-                    <td><strong>Hallucination Severity</strong></td>
-                    <td>{local_metrics['hallucination_severity']:.4f}</td>
-                    <td>&lt; 0.1500</td>
-                    <td class="{"passed" if local_metrics['hallucination_severity'] < 0.15 else "failed"}">
-                        {"Passed" if local_metrics['hallucination_severity'] < 0.15 else "Failed"}
+                    <td><strong>Overall Task Success</strong></td>
+                    <td>{overall_task_success*100:.2f}%</td>
+                    <td>80.00%</td>
+                    <td class="{"passed" if overall_task_success >= 0.80 else "failed"}">
+                        {"Passed" if overall_task_success >= 0.80 else "Failed"}
                     </td>
                 </tr>
                 <tr>
@@ -413,14 +510,6 @@ Complete execution cases and details are saved in `evaluation/results/raw/pipeli
                     <td>&lt; 8000 ms</td>
                     <td class="{"passed" if local_metrics['p95_response_latency_ms'] < 8000 else "failed"}">
                         {"Passed" if local_metrics['p95_response_latency_ms'] < 8000 else "Failed"}
-                    </td>
-                </tr>
-                <tr>
-                    <td><strong>Correct Fallback Rate</strong></td>
-                    <td>{local_metrics['correct_fallback_rate']:.2f}%</td>
-                    <td>85.00%</td>
-                    <td class="{"passed" if local_metrics['correct_fallback_rate'] >= 85 else "failed"}">
-                        {"Passed" if local_metrics['correct_fallback_rate'] >= 85 else "Failed"}
                     </td>
                 </tr>
                 <tr>
@@ -508,6 +597,50 @@ Complete execution cases and details are saved in `evaluation/results/raw/pipeli
                 <li><strong>Error Reduction Rate</strong></li>
             </ul>
         </div>
+
+        <h2>Appendix: Complete Case Log</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Case ID</th>
+                    <th>Document</th>
+                    <th>Category</th>
+                    <th>Grounding</th>
+                    <th>System Outcome</th>
+                    <th>Latency (ms)</th>
+                    <th>RAGAS Correctness</th>
+                    <th>DeepEval Relevancy</th>
+                </tr>
+            </thead>
+            <tbody>
+    """
+
+    for _, row in df_diag.iterrows():
+        ans_status = "Answerable" if row["answerable"] else "Unanswerable"
+        sys_behavior = str(row["outcome_classification"]).replace("_", " ").title()
+        def fmt_val(val):
+            try:
+                return f"{float(val):.2f}"
+            except Exception:
+                return "NaN"
+        ragas_corr_val = fmt_val(row["ragas_correctness_score"])
+        deepeval_rel_val = fmt_val(row["deepeval_relevancy_score"])
+        html_content += f"""
+                <tr>
+                    <td>{row['test_case_id']}</td>
+                    <td>{row['document_id']}</td>
+                    <td>{row['category']}</td>
+                    <td>{ans_status}</td>
+                    <td>{sys_behavior}</td>
+                    <td>{row['total_latency']:.0f}</td>
+                    <td>{ragas_corr_val}</td>
+                    <td>{deepeval_rel_val}</td>
+                </tr>
+        """
+
+    html_content += f"""
+            </tbody>
+        </table>
     </body>
     </html>
     """

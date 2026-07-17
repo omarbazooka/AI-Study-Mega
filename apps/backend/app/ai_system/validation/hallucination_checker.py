@@ -62,8 +62,15 @@ def _rule_based_check(answer: str, context_text: str) -> tuple[list[str], list[s
 
 def _split_into_claims(answer: str) -> list[str]:
     """Splits the answer into sentence-level claims for per-sentence checking."""
-    sentences = re.split(r"(?<=[.!?])\s+", answer.strip())
-    return [s.strip() for s in sentences if s.strip()]
+    # Split by periods, exclamation marks, question marks, Arabic question marks (؟), commas (، and ,), and semicolons (؛ and ;)
+    delimiters = r"[.!?؟،,؛;]"
+    sentences = re.split(f"(?<={delimiters})\\s+|\\n+", answer.strip())
+    cleaned = []
+    for s in sentences:
+        s_clean = s.strip().strip(".!?؟،,؛;")
+        if len(s_clean) > 10:  # Ignore tiny fragments
+            cleaned.append(s_clean)
+    return cleaned
 
 
 def _similarity_check(
@@ -230,10 +237,24 @@ async def check_hallucination(
 
     # --- Combine all layers ---
     if llm_judge_result is not None:
+        # Clean and serialize any dict-based claims returned by the LLM
+        def clean_claims(claims_list):
+            cleaned = []
+            for c in claims_list:
+                if isinstance(c, dict):
+                    text = c.get("claim") or c.get("text") or c.get("statement") or str(c)
+                    cleaned.append(str(text))
+                else:
+                    cleaned.append(str(c))
+            return cleaned
+
+        unsupported_clean = clean_claims(llm_judge_result.get("unsupported_claims", []))
+        supported_clean = clean_claims(llm_judge_result.get("supported_claims", []))
+
         grounding_score = float(llm_judge_result.get("grounding_score", similarity_score))
         grounded = bool(llm_judge_result.get("grounded", grounding_score >= rules.GROUNDING_SIMILARITY_THRESHOLD))
-        unsupported_claims = list(set(unsupported_claims) | set(llm_judge_result.get("unsupported_claims", [])))
-        supported_claims = list(set(supported_claims) | set(llm_judge_result.get("supported_claims", [])))
+        unsupported_claims = list(set(unsupported_claims) | set(unsupported_clean))
+        supported_claims = list(set(supported_claims) | set(supported_clean))
         if llm_judge_result.get("reason"):
             reasons.append(f"LLM judge: {llm_judge_result['reason']}")
         suggested_action = HallucinationAction(llm_judge_result.get("suggested_action", "pass"))
