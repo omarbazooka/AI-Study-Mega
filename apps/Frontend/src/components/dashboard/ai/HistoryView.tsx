@@ -35,7 +35,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   }, [documentId]);
 
   return (
-    <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4 scrollbar-hide">
+    <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4 custom-scrollbar">
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-zinc-800 pb-3">
         <button

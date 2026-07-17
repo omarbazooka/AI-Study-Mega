@@ -867,11 +867,19 @@ async def run_summary_pipeline(task: Task, request: Any, previous_results: Optio
         async def process_block(block_chunks: list, depth: int = 0) -> str:
             api_key, model_name = resolve_config_for_role(LLMRole.MAP_WORKER)
             block_text = "\n".join(c.get("content", "") for c in block_chunks)
-            system_prompt = (
-                "You are a Map-Reduce summary worker. Summarize the following document section, "
-                "highlighting key concepts, facts, names, and timeline dates. Keep it factual and concise."
-            )
-            prompt = f"Section text:\n{block_text}\nSummary:"
+            if lang == "ar":
+                system_prompt = (
+                    "أنت عامل تلخيص. قم بتلخيص قسم المستند التالي باللغة العربية، "
+                    "مع إبراز المفاهيم الأساسية والحقائق والأسماء. اجعله واقعيًا وموجزًا. "
+                    "يجب أن تكون المخرجات باللغة العربية فقط."
+                )
+                prompt = f"نص القسم:\n{block_text}\nالملخص:"
+            else:
+                system_prompt = (
+                    "You are a Map-Reduce summary worker. Summarize the following document section in English, "
+                    "highlighting key concepts, facts, names, and timeline dates. Keep it factual and concise."
+                )
+                prompt = f"Section text:\n{block_text}\nSummary:"
             
             for trial in range(3): # up to 2 retries
                 try:
@@ -935,11 +943,19 @@ async def run_summary_pipeline(task: Task, request: Any, previous_results: Optio
         }
         target = size_targets.get(summary_size, 500)
 
-        system_prompt = (
-            f"You are a Map-Reduce summary reducer. Synthesize the section summaries into a single comprehensive, "
-            f"structured document summary. Format with markdown headings. Target length: approximately {target} words."
-        )
-        prompt = f"Section summaries:\n{combined_map_text}\nReduced Summary:"
+        if lang == "ar":
+            system_prompt = (
+                f"أنت مجمع ملخصات. قم بتجميع ملخصات الأقسام في ملخص مستند شامل ومنظم باللغة العربية. "
+                f"استخدم تنسيق Markdown للعناوين. الطول المستهدف: حوالي {target} كلمة. "
+                f"يجب أن يكون الرد والمخرجات باللغة العربية فقط."
+            )
+            prompt = f"ملخصات الأقسام:\n{combined_map_text}\nالملخص النهائي:"
+        else:
+            system_prompt = (
+                f"You are a Map-Reduce summary reducer. Synthesize the section summaries into a single comprehensive, "
+                f"structured document summary in English. Format with markdown headings. Target length: approximately {target} words."
+            )
+            prompt = f"Section summaries:\n{combined_map_text}\nReduced Summary:"
 
         res = await provider.generate(
             model=model_name,

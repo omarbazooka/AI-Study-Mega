@@ -5,6 +5,9 @@ import { AIResponse, Citation } from "@/types/api/ai";
 import { FileText, Loader2, Sparkles, BookOpen } from "lucide-react";
 import { CitationList } from "./CitationList";
 import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 
 interface SummaryViewProps {
   documentId: string | null;
@@ -15,53 +18,98 @@ interface SummaryViewProps {
   onUpdatePage?: (id: string, updates: { content: string }) => void;
 }
 
+// Used for inserting into Tiptap (page editor)
+// NOTE: Tiptap strips unknown HTML/CSS, so we store math as code blocks
 const markdownToHtml = (markdown: string): string => {
   let html = markdown;
-  
-  // Replace headers: ### text -> <h3>text</h3>
+
+  // Block math: \[...\] and $$...$$ → <pre> code block (Tiptap-safe)
+  html = html.replace(/\$\$([\s\S]+?)\$\$/g, (_, latex) =>
+    `<pre><code>${latex.trim()}</code></pre>`
+  );
+  html = html.replace(/\\\[([\s\S]+?)\\\]/g, (_, latex) =>
+    `<pre><code>${latex.trim()}</code></pre>`
+  );
+
+  // Inline math: \(...\) and $...$ → inline code (Tiptap-safe)
+  html = html.replace(/\\\(([\s\S]+?)\\\)/g, (_, latex) =>
+    `<code>${latex.trim()}</code>`
+  );
+  html = html.replace(/\$([^\$\n]+?)\$/g, (_, latex) =>
+    `<code>${latex.trim()}</code>`
+  );
+
+  // Headers (order matters: #### before ### before ##)
+  html = html.replace(/^#### (.*?)$/gm, '<h4>$1</h4>');
   html = html.replace(/^### (.*?)$/gm, '<h3>$1</h3>');
   html = html.replace(/^## (.*?)$/gm, '<h2>$1</h2>');
   html = html.replace(/^# (.*?)$/gm, '<h1>$1</h1>');
-  
-  // Bold: **text** -> <strong>text</strong>
+
+  // Bold
   html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-  
-  // Lists: - item or * item
+
+  // Lists
   const lines = html.split('\n');
   let inList = false;
   const resultLines: string[] = [];
-  
   for (const line of lines) {
     const trimmed = line.trim();
     if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-      if (!inList) {
-        resultLines.push('<ul>');
-        inList = true;
-      }
-      const itemText = trimmed.substring(2);
-      resultLines.push(`<li>${itemText}</li>`);
+      if (!inList) { resultLines.push('<ul>'); inList = true; }
+      resultLines.push(`<li>${trimmed.substring(2)}</li>`);
     } else {
-      if (inList) {
-        resultLines.push('</ul>');
-        inList = false;
-      }
+      if (inList) { resultLines.push('</ul>'); inList = false; }
       if (trimmed) {
-        if (!trimmed.startsWith('<h') && !trimmed.startsWith('<u') && !trimmed.startsWith('<l')) {
-          resultLines.push(`<p>${trimmed}</p>`);
-        } else {
+        const isHtmlTag = trimmed.startsWith('<h') || trimmed.startsWith('<ul') ||
+          trimmed.startsWith('<li') || trimmed.startsWith('<pre') || trimmed.startsWith('<blockquote');
+        if (isHtmlTag) {
           resultLines.push(trimmed);
+        } else {
+          resultLines.push(`<p>${trimmed}</p>`);
         }
       } else {
         resultLines.push('<p></p>');
       }
     }
   }
-  if (inList) {
-    resultLines.push('</ul>');
-  }
-  
+  if (inList) resultLines.push('</ul>');
   return resultLines.join('\n');
 };
+
+// Preprocess LaTeX delimiters → formats that remark-math understands
+// \[...\]  →  $$\n...\n$$  (block math on its own lines)
+// \(...\)  →  $...$         (inline math)
+const preprocessForMath = (content: string): string => {
+  let out = content;
+  out = out.replace(/\\\[([\s\S]+?)\\\]/g, (_, latex) => `\n$$\n${latex.trim()}\n$$\n`);
+  out = out.replace(/\\\(([\s\S]+?)\\\)/g, (_, latex) => `$${latex.trim()}$`);
+  return out;
+};
+
+const markdownComponents = {
+  p: ({ node, ...props }: any) => (
+    <p className="text-sm text-zinc-300 leading-relaxed font-medium mb-2.5" {...props} />
+  ),
+  ul: ({ node, ...props }: any) => (
+    <ul className="ml-4 list-disc text-sm text-zinc-300 leading-relaxed font-medium mb-1.5" {...props} />
+  ),
+  li: ({ node, ...props }: any) => <li className="mb-1" {...props} />,
+  strong: ({ node, ...props }: any) => <strong className="font-bold text-zinc-100" {...props} />,
+  h4: ({ node, ...props }: any) => <h4 className="text-sm font-bold text-zinc-300 mt-3 mb-1" {...props} />,
+  h3: ({ node, ...props }: any) => <h3 className="text-md font-bold text-zinc-200 mt-4 mb-2" {...props} />,
+  h2: ({ node, ...props }: any) => <h2 className="text-lg font-bold text-zinc-100 mt-5 mb-3" {...props} />,
+  h1: ({ node, ...props }: any) => <h1 className="text-xl font-bold text-zinc-100 mt-6 mb-4" {...props} />,
+};
+
+const renderContent = (content: string): React.ReactNode => (
+  <ReactMarkdown
+    remarkPlugins={[remarkMath]}
+    rehypePlugins={[[rehypeKatex, { throwOnError: false, errorColor: '#cc0000' }]]}
+    components={markdownComponents}
+  >
+    {preprocessForMath(content)}
+  </ReactMarkdown>
+);
 
 export const SummaryView: React.FC<SummaryViewProps> = ({
   documentId,
@@ -130,44 +178,8 @@ export const SummaryView: React.FC<SummaryViewProps> = ({
     }
   };
 
-  const renderContent = (content: string) => {
-    return content.split("\n").map((line, idx) => {
-      const trimmed = line.trim();
-      if (!trimmed) return <div key={idx} className="h-2" />;
-
-      // Parse bold elements (**text**) safely
-      const parts = line.split(/(\*\*.*?\*\*)/g);
-      const elements = parts.map((part, pIdx) => {
-        if (part.startsWith("**") && part.endsWith("**")) {
-          return (
-            <strong key={pIdx} className="font-bold text-zinc-100">
-              {part.slice(2, -2)}
-            </strong>
-          );
-        }
-        return part;
-      });
-
-      // Render bullet list items
-      if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-        const listText = line.substring(2);
-        return (
-          <li key={idx} className="ml-4 list-disc text-sm text-zinc-300 leading-relaxed font-medium mb-1.5">
-            {listText}
-          </li>
-        );
-      }
-
-      return (
-        <p key={idx} className="text-sm text-zinc-300 leading-relaxed font-medium mb-2.5">
-          {elements}
-        </p>
-      );
-    });
-  };
-
   return (
-    <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4 scrollbar-hide">
+    <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4 custom-scrollbar">
       {/* Configuration Header Card */}
       <div className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/30 backdrop-blur-md flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">

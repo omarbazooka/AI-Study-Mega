@@ -3,8 +3,11 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Menu, Home, Search, ChevronDown, ChevronRight, Pencil, Settings, Trash, Plus } from "lucide-react";
+import Link from "next/link";
+import { Menu, Home, Search, ChevronDown, ChevronRight, Pencil, Settings, Trash, Plus, LogOut, Sparkles, User as UserIcon } from "lucide-react";
 import { PageItem } from "@/app/dashboard/DashboardContent";
+import type { User } from "@supabase/supabase-js";
+import { toast } from "sonner";
 
 type SidebarProps = {
   pages?: PageItem[];
@@ -17,6 +20,8 @@ type SidebarProps = {
   onAddPage?: (parentId: string | null, preventSwitch?: boolean) => string | void;
   onTogglePage?: (id: string) => void;
   onDeletePage?: (id: string) => void;
+  user?: User;
+  onLogout?: () => void;
 };
 
 const PageTreeItem = ({ 
@@ -126,12 +131,15 @@ const Sidebar = ({
   onOpenSettings,
   onAddPage,
   onTogglePage,
-  onDeletePage
+  onDeletePage,
+  user,
+  onLogout
 }: SidebarProps) => {
   const router = useRouter();
   const [isPinned, setIsPinned] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
   const [isPagesOpen, setIsPagesOpen] = useState(true);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   // Root pages are those without a parentId
   const rootPages = pages.filter(p => !p.parentId);
@@ -166,12 +174,15 @@ const Sidebar = ({
       >
         <div className="flex items-center px-[34px]">
           <div className="flex-1">
-            <Image
-              src="/icons/logo.svg"
-              alt="Learner Logo"
-              width={130}
-              height={33.39}
-            />
+            <Link href="/">
+              <Image
+                src="/icons/logo.svg"
+                alt="Learner Logo"
+                width={130}
+                height={33.39}
+                className="cursor-pointer"
+              />
+            </Link>
           </div>
           <div
             className="cursor-pointer hover:text-text-primary text-text-secondary transition-colors"
@@ -239,20 +250,79 @@ const Sidebar = ({
           </div>
         </div>
 
-        <div className="mt-auto px-[34px] flex flex-col gap-[26px] text-[#A1A1AA] pb-2">
-          <div
-            className="flex items-center gap-[12px] cursor-pointer hover:text-white transition-colors"
-            onClick={onOpenSettings}
+        <div className="mt-auto px-[20px] pb-4 flex flex-col">
+          {isProfileOpen && (
+            <div className="mb-2 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 shadow-2xl flex flex-col gap-0.5 text-sm animate-in fade-in slide-in-from-bottom-2">
+              <div className="px-3 py-2 border-b border-zinc-800/80 mb-1 flex items-center gap-2">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20 text-primary font-semibold text-sm">
+                  {user?.email?.[0].toUpperCase() || "U"}
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-zinc-200 font-semibold truncate text-[13px]">
+                    {user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || "User"}
+                  </span>
+                  <span className="text-zinc-500 text-[11px] truncate">{user?.email}</span>
+                </div>
+              </div>
+
+              <button 
+                className="flex items-center gap-3 px-3 py-2 text-zinc-300 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer w-full text-left"
+                onClick={() => {
+                  router.push("/pricing");
+                  setIsProfileOpen(false);
+                }}
+              >
+                <Sparkles className="w-4 h-4 text-primary" />
+                <span>Upgrade plan</span>
+              </button>
+
+              <button 
+                className="flex items-center gap-3 px-3 py-2 text-zinc-300 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer w-full text-left"
+                onClick={() => {
+                  onOpenSettings?.();
+                  setIsProfileOpen(false);
+                }}
+              >
+                <Settings className="w-4 h-4 text-zinc-400" />
+                <span>Settings</span>
+              </button>
+
+              <button 
+                className={`flex items-center gap-3 px-3 py-2 ${activeView === "trash" ? "text-white bg-zinc-800" : "text-zinc-300"} hover:text-white hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer w-full text-left`}
+                onClick={() => {
+                  router.push("/dashboard/trash");
+                  setIsProfileOpen(false);
+                }}
+              >
+                <Trash className="w-4 h-4 text-zinc-400" />
+                <span>Trash</span>
+              </button>
+              
+              <div className="h-px bg-zinc-800/80 my-1"></div>
+
+              <button 
+                className="flex items-center gap-3 px-3 py-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer w-full text-left"
+                onClick={() => {
+                  setIsProfileOpen(false);
+                  onLogout?.();
+                }}
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Log out</span>
+              </button>
+            </div>
+          )}
+
+          <div 
+            className="flex items-center gap-3 cursor-pointer hover:bg-white/5 p-2 rounded-xl transition-colors"
+            onClick={() => setIsProfileOpen(!isProfileOpen)}
           >
-            <Settings className="w-[20px] h-[20px]" />
-            <span className="text-[16px]">Settings</span>
-          </div>
-          <div
-            className={`flex items-center gap-[12px] cursor-pointer transition-colors ${activeView === "trash" ? "text-white" : "hover:text-white"}`}
-            onClick={() => router.push("/dashboard/trash")}
-          >
-            <Trash className="w-[20px] h-[20px]" />
-            <span className="text-[16px]">Trash</span>
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20 text-primary font-bold text-sm">
+              {user?.email?.[0].toUpperCase() || "U"}
+            </div>
+            <span className="text-[15px] font-medium text-zinc-200 truncate select-none">
+              {user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || "User"}
+            </span>
           </div>
         </div>
       </aside>

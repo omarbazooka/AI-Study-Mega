@@ -74,7 +74,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   return (
     <div 
       ref={containerRef}
-      className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4.5 scrollbar-hide"
+      className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4.5 custom-scrollbar"
     >
       {messages.map((msg) => (
         <ChatMessage key={msg.id} message={msg} />

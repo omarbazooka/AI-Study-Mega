@@ -117,7 +117,7 @@ export const QuizView: React.FC<QuizViewProps> = ({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4.5 scrollbar-hide">
+    <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4.5 custom-scrollbar">
       {/* 1. Configuration UI */}
       {!quizDetail && !isLoading && (
         <div className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/30 backdrop-blur-md flex flex-col gap-3">

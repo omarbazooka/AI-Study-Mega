@@ -2,6 +2,8 @@ import React from "react";
 import { MessageItem } from "@/types/api/sessions";
 import { Citation } from "@/types/api/ai";
 import { CitationList } from "./CitationList";
+import ReactMarkdown from "react-markdown";
+import katex from "katex";
 
 interface ChatMessageProps {
   message: MessageItem;
@@ -11,40 +13,63 @@ interface ChatMessageProps {
 export const ChatMessage: React.FC<ChatMessageProps> = ({ message, citations }) => {
   const isUser = message.role === "user";
 
-  const renderContent = (content: string) => {
-    return content.split("\n").map((line, idx) => {
-      const trimmed = line.trim();
-      if (!trimmed) return <div key={idx} className="h-2" />;
+  const renderWithMath = (content: string): React.ReactNode[] => {
+    // Handle all LaTeX delimiters: $$...$$, \[...\], $...$, \(...\)
+    let processed = content;
+    processed = processed.replace(/\$\$([\s\S]+?)\$\$/g, (_, l) => `\x00BLOCK\x00${l}\x00ENDBLOCK\x00`);
+    processed = processed.replace(/\\\[([\s\S]+?)\\\]/g, (_, l) => `\x00BLOCK\x00${l}\x00ENDBLOCK\x00`);
+    processed = processed.replace(/\\\(([\s\S]+?)\\\)/g, (_, l) => `\x00INLINE\x00${l}\x00ENDINLINE\x00`);
+    processed = processed.replace(/\$([^\$\n]+?)\$/g, (_, l) => `\x00INLINE\x00${l}\x00ENDINLINE\x00`);
 
-      // Parse bold elements (**text**) safely
-      const parts = line.split(/(\*\*.*?\*\*)/g);
-      const elements = parts.map((part, pIdx) => {
-        if (part.startsWith("**") && part.endsWith("**")) {
-          return (
-            <strong key={pIdx} className="font-bold text-zinc-100">
-              {part.slice(2, -2)}
-            </strong>
-          );
+    const parts: React.ReactNode[] = [];
+    const blockSplit = processed.split(/(\x00BLOCK\x00[\s\S]*?\x00ENDBLOCK\x00)/);
+    blockSplit.forEach((segment, i) => {
+      if (segment.startsWith('\x00BLOCK\x00')) {
+        const latex = segment.replace('\x00BLOCK\x00', '').replace('\x00ENDBLOCK\x00', '').trim();
+        try {
+          const html = katex.renderToString(latex, { displayMode: true, throwOnError: false });
+          parts.push(<div key={`block-${i}`} dangerouslySetInnerHTML={{ __html: html }} className="my-3 overflow-x-auto text-center" />);
+        } catch {
+          parts.push(<div key={`block-${i}`} className="text-red-400 font-mono text-xs my-2">{latex}</div>);
         }
-        return part;
-      });
-
-      // Render bullet list items
-      if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-        const listText = line.substring(2);
-        return (
-          <li key={idx} className="ml-4 list-disc text-sm text-zinc-300 leading-relaxed font-medium mb-1">
-            {listText}
-          </li>
-        );
+      } else {
+        const inlineSplit = segment.split(/(\x00INLINE\x00[\s\S]*?\x00ENDINLINE\x00)/);
+        inlineSplit.forEach((inlineSeg, j) => {
+          if (inlineSeg.startsWith('\x00INLINE\x00')) {
+            const latex = inlineSeg.replace('\x00INLINE\x00', '').replace('\x00ENDINLINE\x00', '').trim();
+            try {
+              const html = katex.renderToString(latex, { displayMode: false, throwOnError: false });
+              parts.push(<span key={`inline-${i}-${j}`} dangerouslySetInnerHTML={{ __html: html }} />);
+            } catch {
+              parts.push(<span key={`inline-${i}-${j}`} className="text-red-400 font-mono text-xs">{latex}</span>);
+            }
+          } else if (inlineSeg.trim()) {
+            parts.push(
+              <ReactMarkdown
+                key={`md-${i}-${j}`}
+                components={{
+                  p: ({ node, ...props }) => <p className="text-sm text-zinc-300 leading-relaxed font-medium mb-2" {...props} />,
+                  ul: ({ node, ...props }) => <ul className="ml-4 list-disc text-sm text-zinc-300 leading-relaxed font-medium mb-1" {...props} />,
+                  li: ({ node, ...props }) => <li className="mb-1" {...props} />,
+                  strong: ({ node, ...props }) => <strong className="font-bold text-zinc-100" {...props} />,
+                  h4: ({ node, ...props }) => <h4 className="text-sm font-bold text-zinc-300 mt-2 mb-1" {...props} />,
+                  h3: ({ node, ...props }) => <h3 className="text-md font-bold text-zinc-200 mt-3 mb-1.5" {...props} />,
+                  h2: ({ node, ...props }) => <h2 className="text-lg font-bold text-zinc-100 mt-4 mb-2" {...props} />,
+                  h1: ({ node, ...props }) => <h1 className="text-xl font-bold text-zinc-100 mt-5 mb-3" {...props} />,
+                }}
+              >
+                {inlineSeg}
+              </ReactMarkdown>
+            );
+          }
+        });
       }
-
-      return (
-        <p key={idx} className="text-sm text-zinc-300 leading-relaxed font-medium mb-2">
-          {elements}
-        </p>
-      );
     });
+    return parts;
+  };
+
+  const renderContent = (content: string) => {
+    return <>{renderWithMath(content)}</>;
   };
 
   return (
