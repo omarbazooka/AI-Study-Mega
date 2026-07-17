@@ -13,21 +13,22 @@ export interface StreamHandlers {
   onCitations?: (citations: any[]) => void;
   onComplete?: (finalContent: string, citations: any[]) => void;
   onError?: (error: any) => void;
+  onStageEvent?: (event: NDJSONStreamEvent) => void;
 }
-
+ 
 export const aiService = {
   async sendChat(documentId: string, payload: PDFChatRequest): Promise<AIResponse> {
     return backendClient.post<AIResponse>(`/api/v1/documents/${documentId}/chat`, payload);
   },
-
+ 
   async generateSummary(documentId: string, payload: SummaryRequest): Promise<AIResponse> {
     return backendClient.post<AIResponse>(`/api/v1/documents/${documentId}/summary`, payload);
   },
-
+ 
   async generateQuiz(documentId: string, payload: QuizRequest): Promise<AIResponse> {
     return backendClient.post<AIResponse>(`/api/v1/documents/${documentId}/quiz`, payload);
   },
-
+ 
   async streamChat(
     documentId: string,
     payload: PDFChatRequest,
@@ -40,41 +41,45 @@ export const aiService = {
       if (!response.body) {
         throw new Error("Response body is not readable.");
       }
-
+ 
       const reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
       let buffer = "";
       let completedSuccessfully = false;
       let finalContent = "";
       let finalCitations: any[] = [];
-
+ 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
+ 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
         buffer = lines.pop() || ""; // Keep incomplete line in buffer
-
+ 
         for (const line of lines) {
           const trimmed = line.trim();
           if (!trimmed) continue;
-
+ 
           try {
             const event: NDJSONStreamEvent = JSON.parse(trimmed);
             
+            if (handlers.onStageEvent) {
+              handlers.onStageEvent(event);
+            }
+ 
             // Invoke handlers based on event stage/status
             if (handlers.onProgress) {
-              handlers.onProgress(event.progress, event.stage, event.message);
+              handlers.onProgress(event.progress, event.stage, event.message || "");
             }
 
             if (event.node_id) {
               if (event.status === "started" && handlers.onTaskStarted) {
-                handlers.onTaskStarted(event.node_id, event.stage, event.message);
+                handlers.onTaskStarted(event.node_id, event.stage, event.message || "");
               } else if (event.status === "completed" && handlers.onTaskCompleted) {
                 handlers.onTaskCompleted(event.node_id, event.stage);
               } else if (event.status === "failed" && handlers.onTaskFailed) {
-                handlers.onTaskFailed(event.node_id, event.stage, event.message);
+                handlers.onTaskFailed(event.node_id, event.stage, event.message || "");
               }
             }
 

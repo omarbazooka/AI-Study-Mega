@@ -69,8 +69,8 @@ export interface NDJSONStreamEvent {
   request_id: string;
   node_id?: string | null;
   stage: string;
-  status: "started" | "completed" | "failed";
-  message: string;
+  status: "started" | "progress" | "completed" | "failed" | "cancelled";
+  message?: string;
   progress: number;
   timestamp: string;
   content?: string;
@@ -80,4 +80,6 @@ export interface NDJSONStreamEvent {
     section_title?: string | null;
     score?: number | null;
   }>;
+  confidence?: number;
+  metadata?: Record<string, any>;
 }

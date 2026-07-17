@@ -59,6 +59,30 @@ class TaskPlanner:
         }
 
     async def plan(self, request: Any) -> DAGPlan:
+        from app.ai_system.streaming.stage_emitter import emit_stage_event
+        from app.ai_system.streaming.stage_events import PublicAIStage, StageStatus
+        from app.ai_system.streaming.public_request_summary import build_public_request_summary
+
+        await emit_stage_event(PublicAIStage.PLANNING, StageStatus.STARTED, progress=20.0)
+        try:
+            plan_obj = await self._plan_impl(request)
+            summary = build_public_request_summary(plan_obj, request, getattr(request, "language", "ar") or "ar")
+            await emit_stage_event(
+                stage=PublicAIStage.PLANNING,
+                status=StageStatus.COMPLETED,
+                progress=35.0,
+                metadata={
+                    "public_request_summary": summary,
+                    "execution_mode": plan_obj.execution_mode.value,
+                    "task_types": [t.type.value for t in plan_obj.tasks]
+                }
+            )
+            return plan_obj
+        except Exception as e:
+            await emit_stage_event(PublicAIStage.PLANNING, StageStatus.FAILED, f"Planning failed: {e}", progress=35.0)
+            raise
+
+    async def _plan_impl(self, request: Any) -> DAGPlan:
         """
         Generates a DAGPlan based on the request (PDFChatRequest, SummaryRequest, or QuizRequest).
         Genuinely executes an LLM Planner for complex multi-intent requests.

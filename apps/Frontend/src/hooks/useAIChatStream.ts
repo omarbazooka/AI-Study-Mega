@@ -24,6 +24,10 @@ export function useAIChatStream({ documentId, userId, documentReady }: UseAIChat
   const [streamStatus, setStreamStatus] = useState<string | null>(null);
   const [activeCitations, setActiveCitations] = useState<Citation[]>([]);
   const [currentAssistantText, setCurrentAssistantText] = useState<string>("");
+  const [completedStages, setCompletedStages] = useState<string[]>([]);
+  const [activeNodes, setActiveNodes] = useState<Record<string, any>>({});
+  const [publicRequestSummary, setPublicRequestSummary] = useState<string | null>(null);
+  const [stageMetadata, setStageMetadata] = useState<Record<string, any>>({});
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const isCreatingSession = useRef<boolean>(false);
@@ -121,11 +125,15 @@ export function useAIChatStream({ documentId, userId, documentReady }: UseAIChat
 
     cancelCurrentStream();
     setIsSending(true);
-    setStreamStage("Initializing");
+    setStreamStage("request_received");
     setStreamProgress(0);
     setStreamStatus("started");
     setCurrentAssistantText("");
     setActiveCitations([]);
+    setCompletedStages([]);
+    setActiveNodes({});
+    setPublicRequestSummary(null);
+    setStageMetadata({});
 
     // 1. Optimistic User Message update
     const userMsgId = `user-${Date.now()}`;
@@ -155,14 +163,52 @@ export function useAIChatStream({ documentId, userId, documentReady }: UseAIChat
           language,
         },
         {
+          onStageEvent: (event) => {
+            // Keep progress monotonic
+            setStreamProgress((prev) => Math.max(prev, event.progress));
+            
+            // Set current stage and status
+            setStreamStage(event.stage);
+            setStreamStatus(event.status);
+
+            // Accumulate completed stages
+            if (event.status === "completed") {
+              setCompletedStages((prev) => {
+                if (!prev.includes(event.stage)) {
+                  return [...prev, event.stage];
+                }
+                return prev;
+              });
+            }
+
+            // Track public request summary
+            if (event.metadata?.public_request_summary) {
+              setPublicRequestSummary(event.metadata.public_request_summary);
+            }
+
+            // Track stage metadata
+            if (event.metadata) {
+              setStageMetadata((prev) => ({ ...prev, ...event.metadata }));
+            }
+
+            // Track active task node IDs
+            if (event.node_id) {
+              setActiveNodes((prev) => {
+                const copy = { ...prev };
+                if (event.status === "started") {
+                  copy[event.node_id!] = event;
+                } else if (event.status === "completed" || event.status === "failed") {
+                  delete copy[event.node_id!];
+                }
+                return copy;
+              });
+            }
+          },
           onProgress: (progress, stage, msg) => {
-            setStreamProgress(progress);
-            setStreamStage(stage);
-            setStreamStatus("progress");
+            // Deprecated callback fallback, everything handled in onStageEvent
           },
           onContent: (chunk) => {
             accumulatedText = chunk;
-            // Do not immediately flash the full text to avoid flashing prior to typing animation.
           },
           onCitations: (citations) => {
             citationsAccumulator = citations;
@@ -170,7 +216,7 @@ export function useAIChatStream({ documentId, userId, documentReady }: UseAIChat
           },
           onComplete: (finalText, citations) => {
             setStreamStatus("completed");
-            setStreamStage("Completed");
+            setStreamStage("completed");
             setStreamProgress(100);
 
             // Clean up any existing typing timer just in case
@@ -208,6 +254,10 @@ export function useAIChatStream({ documentId, userId, documentReady }: UseAIChat
                 setMessages((prev) => [...prev, assistantMessage]);
                 setCurrentAssistantText("");
                 setActiveCitations([]);
+                setCompletedStages([]);
+                setActiveNodes({});
+                setPublicRequestSummary(null);
+                setStageMetadata({});
                 abortControllerRef.current = null;
               }
             }, 25); // 25ms interval per word chunk
@@ -215,7 +265,8 @@ export function useAIChatStream({ documentId, userId, documentReady }: UseAIChat
           onError: (err: ApiError) => {
             setIsSending(false);
             setStreamStatus("failed");
-            setStreamStage("Failed");
+            setStreamStage("failed");
+            setStageMetadata((prev) => ({ ...prev, error_message: err.message || "Failed to receive response from AI." }));
             toast.error(err.message || "Failed to receive response from AI.");
             abortControllerRef.current = null;
           },
@@ -225,7 +276,8 @@ export function useAIChatStream({ documentId, userId, documentReady }: UseAIChat
     } catch (err: any) {
       setIsSending(false);
       setStreamStatus("failed");
-      setStreamStage("Failed");
+      setStreamStage("failed");
+      setStageMetadata((prev) => ({ ...prev, error_message: err.message || "Failed to receive response from AI." }));
       abortControllerRef.current = null;
     }
   };
@@ -240,6 +292,10 @@ export function useAIChatStream({ documentId, userId, documentReady }: UseAIChat
     streamStatus,
     activeCitations,
     currentAssistantText,
+    completedStages,
+    activeNodes,
+    publicRequestSummary,
+    stageMetadata,
     sendMessage,
     stopStreaming: cancelCurrentStream,
     refreshHistory: () => documentId && userId && initializeSessionAndHistory(documentId, userId),

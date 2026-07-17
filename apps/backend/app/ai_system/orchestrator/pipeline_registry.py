@@ -212,17 +212,22 @@ async def execute_common_pipeline_steps(
     evidence_status_str = "sufficient"
     
     if document_id and task.retrieval_required:
+        from app.ai_system.streaming.stage_emitter import emit_stage_event
+        from app.ai_system.streaming.stage_events import PublicAIStage, StageStatus
         from app.ai_system.validation.context_collector import collect_context
         from app.ai_system.validation.evidence_gate import validate_evidence
         from app.ai_system.validation.schemas import ExecutionStrategy, EvidenceStatus, DocumentTaskType, ResponseStrategy
         
+        await emit_stage_event(PublicAIStage.QUERY_PREPARATION, StageStatus.STARTED, node_id=task.task_id)
         strategy = ExecutionStrategy.focused_retrieval
         primary_task = DocumentTaskType.document_factual_qa
         validation_res = getattr(request, "_input_validation", None)
         if validation_res:
             strategy = validation_res.context_strategy or ExecutionStrategy.focused_retrieval
             primary_task = validation_res.primary_task or DocumentTaskType.document_factual_qa
+        await emit_stage_event(PublicAIStage.QUERY_PREPARATION, StageStatus.COMPLETED, node_id=task.task_id)
             
+        await emit_stage_event(PublicAIStage.RETRIEVAL, StageStatus.STARTED, node_id=task.task_id)
         # Single retrieval call — DocumentRetriever already performs 3-attempt
         # progressive threshold relaxation (0.55 → 0.40 → 0.25) internally.
         # Do NOT duplicate query rewriting here; route through collect_context.
@@ -238,7 +243,9 @@ async def execute_common_pipeline_steps(
             state.retrieval_result if state is not None
             else getattr(request, "_retrieval_result", None)
         )
+        await emit_stage_event(PublicAIStage.RETRIEVAL, StageStatus.COMPLETED, node_id=task.task_id, metadata={"candidate_count": len(val_chunks)})
 
+        await emit_stage_event(PublicAIStage.RERANKING, StageStatus.STARTED, node_id=task.task_id)
         # Check evidence sufficiency
         evidence_res = await validate_evidence(
             primary_task=primary_task,
@@ -253,6 +260,7 @@ async def execute_common_pipeline_steps(
                 f"Proceeding with partial answer directive."
             )
         evidence_status_str = evidence_res.evidence_status.value
+        await emit_stage_event(PublicAIStage.RERANKING, StageStatus.COMPLETED, node_id=task.task_id, metadata={"selected_source_count": len(val_chunks)})
 
         
         # If insufficient, skip Executor LLM and verify loop entirely!
@@ -372,6 +380,10 @@ async def execute_common_pipeline_steps(
     await store.save_message(user_msg)
 
     # 5. Fetch student Memory Context
+    from app.ai_system.streaming.stage_emitter import emit_stage_event
+    from app.ai_system.streaming.stage_events import PublicAIStage, StageStatus
+
+    await emit_stage_event(PublicAIStage.PERSONALIZATION, StageStatus.STARTED, node_id=task.task_id)
     memory_context = await memory_retriever.get_memory_context(
         user_id=user_id,
         session_id=session_id,
@@ -379,8 +391,14 @@ async def execute_common_pipeline_steps(
         source_type="document",
         user_query=task.query
     )
+    # Check if personalization is actually applied (has profile or recent history)
+    has_prefs = hasattr(memory_context, 'profile') or (hasattr(memory_context, 'recent_messages') and len(memory_context.recent_messages) > 0)
+    if has_prefs:
+        await emit_stage_event(PublicAIStage.PERSONALIZATION, StageStatus.COMPLETED, node_id=task.task_id)
+    # We do NOT emit completed if personalization was not applied, keeping it clean!
 
     # 6. Temporary context selection
+    await emit_stage_event(PublicAIStage.CONTEXT_BUILDING, StageStatus.STARTED, node_id=task.task_id)
     if task_type in [TaskType.CHAT_ANSWER, TaskType.EXPLAIN, TaskType.KEY_POINTS, TaskType.COMPARISON_TABLE]:
         selected_chunks = chunks[:5]
     else:
@@ -401,6 +419,7 @@ async def execute_common_pipeline_steps(
                 content=c.get("content", "")
             )
         )
+    await emit_stage_event(PublicAIStage.CONTEXT_BUILDING, StageStatus.COMPLETED, node_id=task.task_id)
 
     # Execute task using precomputed content or LLM generation
     content_result = ""
@@ -465,12 +484,17 @@ async def execute_common_pipeline_steps(
         
         for attempt in range(policy.max_retries + 1):
             if attempt > 0:
+                await emit_stage_event(PublicAIStage.REFINING, StageStatus.STARTED, node_id=task.task_id, metadata={"retry_count": attempt})
                 payload.task_query = (
                     f"{task.query}\n\n[Correction Instruction: Previous attempt failed verification. "
                     f"Ensure output grounds strictly in context and adheres to OutputFormat: {output_type}]"
                 )
             
             try:
+                from app.ai_system.streaming.stage_mapper import map_task_type_to_stage
+                gen_stage = map_task_type_to_stage(task_type)
+                await emit_stage_event(gen_stage, StageStatus.STARTED, node_id=task.task_id)
+
                 is_map_reduce = False
                 if task_type in [TaskType.SUMMARY, TaskType.QUIZ]:
                     total_chars = sum(len(c.get("content", "")) for c in chunks)
@@ -487,6 +511,7 @@ async def execute_common_pipeline_steps(
                     
                     map_response = await llm_generate(map_payload)
                     if map_response.status == "failure":
+                        await emit_stage_event(gen_stage, StageStatus.FAILED, node_id=task.task_id, message=map_response.error_message)
                         verification_trace = {"status": "error", "error": map_response.error_message, "retries": attempt}
                         continue
                     
@@ -506,9 +531,12 @@ async def execute_common_pipeline_steps(
                     llm_response = await llm_generate(payload)
 
                 if llm_response.status == "failure":
+                    await emit_stage_event(gen_stage, StageStatus.FAILED, node_id=task.task_id, message=llm_response.error_message)
                     verification_trace = {"status": "error", "error": llm_response.error_message, "retries": attempt}
                     continue
                 
+                await emit_stage_event(gen_stage, StageStatus.COMPLETED, node_id=task.task_id)
+
                 # Check verification
                 raw_response = llm_response.output_text if llm_response.output_text is not None else (json.dumps(llm_response.output_json, ensure_ascii=False) if llm_response.output_json else "")
                 
@@ -521,11 +549,14 @@ async def execute_common_pipeline_steps(
                     if warning_suffix not in raw_response:
                         raw_response = raw_response + warning_suffix
                 
+                await emit_stage_event(PublicAIStage.CITATIONS, StageStatus.STARTED, node_id=task.task_id)
                 citations = build_citations(val_chunks, raw_response, llm_response.source_chunk_ids)
+                await emit_stage_event(PublicAIStage.CITATIONS, StageStatus.COMPLETED, node_id=task.task_id, metadata={"cited_source_count": len(citations)})
                 
                 strategy_val = validation_res.response_strategy if validation_res else ResponseStrategy.continue_to_planner
                 primary_task_val = validation_res.primary_task if validation_res else None
 
+                await emit_stage_event(PublicAIStage.VERIFICATION, StageStatus.STARTED, node_id=task.task_id)
                 verification = await default_verifier_client.verify(
                     user_query=task.query,
                     intent=task_type.value,
@@ -548,8 +579,11 @@ async def execute_common_pipeline_steps(
                 }
 
                 if verification.success:
+                    await emit_stage_event(PublicAIStage.VERIFICATION, StageStatus.COMPLETED, node_id=task.task_id)
                     verification_passed = True
                     break
+                else:
+                    await emit_stage_event(PublicAIStage.VERIFICATION, StageStatus.FAILED, node_id=task.task_id, message=verification.reason)
             except Exception as e:
                 # Map technical exceptions to typed reason codes
                 err_str = str(e)

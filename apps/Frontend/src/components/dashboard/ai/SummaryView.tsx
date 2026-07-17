@@ -7,6 +7,7 @@ import { CitationList } from "./CitationList";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
+import remarkGfm from "remark-gfm";
 import rehypeKatex from "rehype-katex";
 
 interface SummaryViewProps {
@@ -50,31 +51,109 @@ const markdownToHtml = (markdown: string): string => {
   // Bold
   html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 
-  // Lists
+  // Lines loop to handle lists & tables
   const lines = html.split('\n');
-  let inList = false;
   const resultLines: string[] = [];
-  for (const line of lines) {
+  let inList = false;
+  let inTable = false;
+  let tableRows: string[][] = [];
+  let isHeaderRow = true;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     const trimmed = line.trim();
-    if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-      if (!inList) { resultLines.push('<ul>'); inList = true; }
-      resultLines.push(`<li>${trimmed.substring(2)}</li>`);
+
+    // Check if line starts and ends with | (or at least looks like a table row)
+    const isTableRow = trimmed.startsWith('|') && trimmed.endsWith('|') && trimmed.length > 1;
+
+    if (isTableRow) {
+      if (inList) {
+        resultLines.push('</ul>');
+        inList = false;
+      }
+
+      // Parse cells
+      const cells = trimmed
+        .split('|')
+        .slice(1, -1) // remove empty first and last elements
+        .map(c => c.trim());
+
+      // Check if it's a separator line like |---|---|
+      const isSeparator = cells.every(c => /^:?-+:?$/.test(c));
+
+      if (isSeparator) {
+        isHeaderRow = false;
+        continue;
+      }
+
+      if (!inTable) {
+        inTable = true;
+        tableRows = [];
+        isHeaderRow = true;
+      }
+
+      tableRows.push(cells);
     } else {
-      if (inList) { resultLines.push('</ul>'); inList = false; }
-      if (trimmed) {
-        const isHtmlTag = trimmed.startsWith('<h') || trimmed.startsWith('<ul') ||
-          trimmed.startsWith('<li') || trimmed.startsWith('<pre') || trimmed.startsWith('<blockquote');
-        if (isHtmlTag) {
-          resultLines.push(trimmed);
-        } else {
-          resultLines.push(`<p>${trimmed}</p>`);
-        }
+      // Close table if we were in one
+      if (inTable) {
+        resultLines.push('<table>');
+        resultLines.push('<tbody>');
+        tableRows.forEach((row, rowIndex) => {
+          resultLines.push('<tr>');
+          row.forEach(cell => {
+            let cellContent = cell;
+            cellContent = cellContent.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            cellContent = cellContent.replace(/`([^`\n]+?)`/g, '<code>$1</code>');
+            const cellTag = (rowIndex === 0 && isHeaderRow) ? 'th' : 'td';
+            resultLines.push(`<${cellTag}>${cellContent}</${cellTag}>`);
+          });
+          resultLines.push('</tr>');
+        });
+        resultLines.push('</tbody>');
+        resultLines.push('</table>');
+        inTable = false;
+      }
+
+      if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+        if (!inList) { resultLines.push('<ul>'); inList = true; }
+        resultLines.push(`<li>${trimmed.substring(2)}</li>`);
       } else {
-        resultLines.push('<p></p>');
+        if (inList) { resultLines.push('</ul>'); inList = false; }
+        if (trimmed) {
+          const isHtmlTag = trimmed.startsWith('<h') || trimmed.startsWith('<ul') ||
+            trimmed.startsWith('<li') || trimmed.startsWith('<pre') || trimmed.startsWith('<blockquote') || trimmed.startsWith('<table');
+          if (isHtmlTag) {
+            resultLines.push(trimmed);
+          } else {
+            resultLines.push(`<p>${trimmed}</p>`);
+          }
+        } else {
+          resultLines.push('<p></p>');
+        }
       }
     }
   }
+
+  // Handle open tags at end
+  if (inTable) {
+    resultLines.push('<table>');
+    resultLines.push('<tbody>');
+    tableRows.forEach((row, rowIndex) => {
+      resultLines.push('<tr>');
+      row.forEach(cell => {
+        let cellContent = cell;
+        cellContent = cellContent.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        cellContent = cellContent.replace(/`([^`\n]+?)`/g, '<code>$1</code>');
+        const cellTag = (rowIndex === 0 && isHeaderRow) ? 'th' : 'td';
+        resultLines.push(`<${cellTag}>${cellContent}</${cellTag}>`);
+      });
+      resultLines.push('</tr>');
+    });
+    resultLines.push('</tbody>');
+    resultLines.push('</table>');
+  }
   if (inList) resultLines.push('</ul>');
+
   return resultLines.join('\n');
 };
 
@@ -101,11 +180,15 @@ const markdownComponents = {
   h3: ({ node, ...props }: any) => <h3 className="text-md font-bold text-zinc-200 mt-4 mb-2" {...props} />,
   h2: ({ node, ...props }: any) => <h2 className="text-lg font-bold text-zinc-100 mt-5 mb-3" {...props} />,
   h1: ({ node, ...props }: any) => <h1 className="text-xl font-bold text-zinc-100 mt-6 mb-4" {...props} />,
+  table: ({ node, ...props }: any) => <div className="overflow-x-auto my-3 max-w-full"><table className="border-collapse border border-zinc-800 w-full text-xs text-zinc-300" {...props} /></div>,
+  thead: ({ node, ...props }: any) => <thead className="bg-zinc-850" {...props} />,
+  th: ({ node, ...props }: any) => <th className="border border-zinc-800 px-3 py-2 text-left font-bold text-zinc-200" {...props} />,
+  td: ({ node, ...props }: any) => <td className="border border-zinc-800 px-3 py-2 text-left" {...props} />,
 };
 
 const renderContent = (content: string): React.ReactNode => (
   <ReactMarkdown
-    remarkPlugins={[remarkMath]}
+    remarkPlugins={[remarkMath, remarkGfm]}
     rehypePlugins={[[rehypeKatex, { throwOnError: false, errorColor: '#cc0000' }]]}
     components={markdownComponents}
   >

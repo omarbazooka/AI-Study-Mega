@@ -4,12 +4,20 @@ import { Citation } from "@/types/api/ai";
 import { ChatMessage } from "./ChatMessage";
 import { Sparkles, MessageSquare } from "lucide-react";
 
+import { AIProcessingIndicator } from "./AIProcessingIndicator";
+
 interface ChatViewProps {
   messages: MessageItem[];
   currentAssistantText: string;
   activeCitations: Citation[];
   isSending: boolean;
   isLoadingHistory: boolean;
+  streamStage?: string | null;
+  streamProgress?: number;
+  streamStatus?: string | null;
+  completedStages?: string[];
+  publicRequestSummary?: string | null;
+  stageMetadata?: Record<string, any>;
 }
 
 export const ChatView: React.FC<ChatViewProps> = ({
@@ -18,6 +26,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
   activeCitations,
   isSending,
   isLoadingHistory,
+  streamStage,
+  streamProgress = 0,
+  streamStatus,
+  completedStages = [],
+  publicRequestSummary,
+  stageMetadata,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -28,7 +42,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         behavior: "smooth",
       });
     }
-  }, [messages, currentAssistantText]);
+  }, [messages, currentAssistantText, isSending]);
 
   if (isLoadingHistory) {
     return (
@@ -85,12 +99,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
       )}
 
       {isSending && !currentAssistantText && (
-        <div className="flex flex-col gap-1 max-w-[85%] self-start items-start">
-          <div className="px-4 py-2.5 rounded-2xl bg-zinc-900/60 border border-zinc-800 rounded-bl-none flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-primary animate-bounce delay-0" />
-            <span className="h-2 w-2 rounded-full bg-primary animate-bounce delay-150" />
-            <span className="h-2 w-2 rounded-full bg-primary animate-bounce delay-300" />
-          </div>
+        <div className="flex flex-col gap-1 max-w-[85%] self-start items-start w-full">
+          <AIProcessingIndicator
+            stage={streamStage || "request_received"}
+            progress={streamProgress}
+            status={streamStatus || null}
+            completedStages={completedStages}
+            publicRequestSummary={publicRequestSummary}
+            metadata={stageMetadata}
+          />
         </div>
       )}
     </div>

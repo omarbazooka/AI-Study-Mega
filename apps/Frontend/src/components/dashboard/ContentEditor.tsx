@@ -19,7 +19,11 @@ const DragHandleComponent = DragHandle as any;
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import { MathExtension } from '@aarkue/tiptap-math-extension';
-import { Type, Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare, ChevronRight, FilePlus, Quote, Minus, FileText } from 'lucide-react';
+import { Table } from '@tiptap/extension-table';
+import { TableRow } from '@tiptap/extension-table-row';
+import { TableCell } from '@tiptap/extension-table-cell';
+import { TableHeader } from '@tiptap/extension-table-header';
+import { Type, Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare, ChevronRight, FilePlus, Quote, Minus, FileText, Table as TableIcon } from 'lucide-react';
 
 const Summary = TiptapNode.create({
   name: 'summary',
@@ -247,6 +251,12 @@ const ContentEditor = ({ activePage, allPages = [], updatePage, onSelectPage, on
         nested: true,
       }),
       MathExtension.configure({ evaluation: false }),
+      Table.configure({
+        resizable: true,
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
     ],
     content: activePage?.content || '',
     onUpdate: ({ editor }) => {
@@ -387,6 +397,13 @@ const ContentEditor = ({ activePage, allPages = [], updatePage, onSelectPage, on
       description: 'Visually divide sections with a line.',
       icon: <Minus className="w-4 h-4 text-neutral-400" />,
       action: () => editor?.chain().focus().setHorizontalRule().run(),
+    },
+    {
+      id: 'table',
+      title: 'Table',
+      description: 'Insert a 3x3 grid table.',
+      icon: <TableIcon className="w-4 h-4 text-neutral-400" />,
+      action: () => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
     },
   ], [editor, activePage, onAddPage]);
 
@@ -687,7 +704,7 @@ const ContentEditor = ({ activePage, allPages = [], updatePage, onSelectPage, on
         />
 
         {/* Content Area */}
-        {editor && (
+        {editor && !editor.isActive('table') && (
           <BubbleMenu 
             editor={editor} 
             className="flex items-center gap-1.5 bg-[#0f0f13]/90 backdrop-blur-xl border border-white/10 p-1.5 rounded-full shadow-[0_10px_30px_rgba(0,0,0,0.5)] z-50 select-none relative"
@@ -799,6 +816,72 @@ const ContentEditor = ({ activePage, allPages = [], updatePage, onSelectPage, on
                 </div>
               )}
             </div>
+          </BubbleMenu>
+        )}
+
+        {editor && editor.isActive('table') && (
+          <BubbleMenu 
+            editor={editor} 
+            className="flex items-center gap-1 bg-[#0f0f13]/95 backdrop-blur-xl border border-white/10 p-1.5 rounded-xl shadow-[0_15px_40px_rgba(0,0,0,0.7)] z-50 select-none relative"
+          >
+            <button
+              type="button"
+              onClick={() => editor.chain().focus().addColumnBefore().run()}
+              className="px-2 py-1 text-xs rounded hover:bg-white/10 text-neutral-300 hover:text-white transition-colors"
+              title="Add column before"
+            >
+              +Col L
+            </button>
+            <button
+              type="button"
+              onClick={() => editor.chain().focus().addColumnAfter().run()}
+              className="px-2 py-1 text-xs rounded hover:bg-white/10 text-neutral-300 hover:text-white transition-colors"
+              title="Add column after"
+            >
+              +Col R
+            </button>
+            <button
+              type="button"
+              onClick={() => editor.chain().focus().deleteColumn().run()}
+              className="px-2 py-1 text-xs rounded hover:bg-red-400/20 text-red-400 transition-colors"
+              title="Delete column"
+            >
+              -Col
+            </button>
+            <div className="w-[1px] h-4 bg-white/10 mx-1" />
+            <button
+              type="button"
+              onClick={() => editor.chain().focus().addRowBefore().run()}
+              className="px-2 py-1 text-xs rounded hover:bg-white/10 text-neutral-300 hover:text-white transition-colors"
+              title="Add row before"
+            >
+              +Row A
+            </button>
+            <button
+              type="button"
+              onClick={() => editor.chain().focus().addRowAfter().run()}
+              className="px-2 py-1 text-xs rounded hover:bg-white/10 text-neutral-300 hover:text-white transition-colors"
+              title="Add row after"
+            >
+              +Row B
+            </button>
+            <button
+              type="button"
+              onClick={() => editor.chain().focus().deleteRow().run()}
+              className="px-2 py-1 text-xs rounded hover:bg-red-400/20 text-red-400 transition-colors"
+              title="Delete row"
+            >
+              -Row
+            </button>
+            <div className="w-[1px] h-4 bg-white/10 mx-1" />
+            <button
+              type="button"
+              onClick={() => editor.chain().focus().deleteTable().run()}
+              className="px-2 py-1 text-xs rounded hover:bg-red-500/20 text-red-400 font-semibold transition-colors"
+              title="Delete table"
+            >
+              Delete Table
+            </button>
           </BubbleMenu>
         )}
 

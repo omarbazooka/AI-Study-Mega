@@ -3,6 +3,7 @@ import { MessageItem } from "@/types/api/sessions";
 import { Citation } from "@/types/api/ai";
 import { CitationList } from "./CitationList";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import katex from "katex";
 
 interface ChatMessageProps {
@@ -47,6 +48,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, citations }) 
             parts.push(
               <ReactMarkdown
                 key={`md-${i}-${j}`}
+                remarkPlugins={[remarkGfm]}
                 components={{
                   p: ({ node, ...props }) => <p className="text-sm text-zinc-300 leading-relaxed font-medium mb-2" {...props} />,
                   ul: ({ node, ...props }) => <ul className="ml-4 list-disc text-sm text-zinc-300 leading-relaxed font-medium mb-1" {...props} />,
@@ -56,6 +58,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, citations }) 
                   h3: ({ node, ...props }) => <h3 className="text-md font-bold text-zinc-200 mt-3 mb-1.5" {...props} />,
                   h2: ({ node, ...props }) => <h2 className="text-lg font-bold text-zinc-100 mt-4 mb-2" {...props} />,
                   h1: ({ node, ...props }) => <h1 className="text-xl font-bold text-zinc-100 mt-5 mb-3" {...props} />,
+                  table: ({ node, ...props }) => <div className="overflow-x-auto my-3 max-w-full"><table className="border-collapse border border-zinc-800 w-full text-xs text-zinc-300" {...props} /></div>,
+                  thead: ({ node, ...props }) => <thead className="bg-zinc-800/40" {...props} />,
+                  th: ({ node, ...props }) => <th className="border border-zinc-800 px-3 py-2 text-left font-bold text-zinc-200" {...props} />,
+                  td: ({ node, ...props }) => <td className="border border-zinc-800 px-3 py-2 text-left" {...props} />,
                 }}
               >
                 {inlineSeg}

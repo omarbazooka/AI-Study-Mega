@@ -366,122 +366,85 @@ async def chat_with_pdf_stream(
     request.user_id = current_user_id
 
     from fastapi.responses import StreamingResponse
-    
+    import asyncio
+    from app.ai_system.streaming.stage_emitter import set_current_emitter, clear_current_emitter, emit_stage_event
+    from app.ai_system.streaming.stage_events import AIStageEvent, PublicAIStage, StageStatus
+
     async def event_generator():
-        # Setup trace stream
         req_id = str(uuid.uuid4())
-        
-        # Helper to yield event
-        def make_event(stage: str, status: str, message: str, progress: float, node_id: Optional[str] = None, data: Optional[dict] = None):
-            import json
-            from datetime import datetime, timezone
-            event_obj = {
-                "request_id": req_id,
-                "node_id": node_id,
-                "stage": stage,
-                "status": status,
-                "message": message,
-                "progress": progress,
-                "timestamp": datetime.now(timezone.utc).isoformat()
-            }
-            if data:
-                event_obj.update(data)
-            return json.dumps(event_obj, ensure_ascii=False) + "\n"
+        event_queue = asyncio.Queue()
 
-        # Stage 1: Auth & Validation completed
-        yield make_event("authentication", "completed", "User authentication and scope verified.", 5.0)
-        yield make_event("input_validation", "started", "Validating query input.", 10.0)
-        
-        # Run input validation checks
-        from app.ai_system.validation.input_validator import validate_input
-        val_result = await validate_input(
-            raw_text=request.message,
-            document_id=document_id,
-            user_id=current_user_id
-        )
-        request._input_validation = val_result
-        if not val_result.valid:
-            yield make_event("input_validation", "failed", f"Input validation rejected: {', '.join(val_result.reasons)}", 100.0)
-            return
+        async def on_event(event: AIStageEvent):
+            await event_queue.put(event)
 
-        # Early-return for non-pipeline paths (e.g. greetings, clarifications, boundaries).
-        # These must NEVER reach planner, retrieval, LLM, or verifier.
-        if not val_result.allow_pipeline:
-            from app.ai_system.validation.dynamic_response import compose_dynamic_response
-            from app.ai_system.validation.schemas import ResponseStrategy
-            import logging as _logging
-            _logging.getLogger(__name__).info(
-                f"[FALLBACK_REASON: greeting_early_response] "
-                f"strategy={val_result.response_strategy} query={request.message!r}"
-            )
-            lang = getattr(request, "language", "ar") or "ar"
-            early_content = compose_dynamic_response(val_result.response_strategy, lang=lang)
-            yield make_event(
-                "completed", "completed",
-                "Query handled without document retrieval.",
-                100.0,
-                data={"content": early_content, "citations": []}
-            )
-            return
+        # Bind emitter inside ContextVar
+        set_current_emitter(req_id, on_event)
 
-        yield make_event("input_validation", "completed", "Input validated successfully.", 15.0)
-        
-        # Stage 2: Planning
-        yield make_event("planning", "started", "Constructing task execution plan DAG.", 20.0)
-        from app.ai_system.orchestrator.planner import TaskPlanner
-        planner = TaskPlanner()
-        try:
-            plan = await planner.plan(request)
-            yield make_event("planning", "completed", f"Plan generated successfully with {len(plan.tasks)} tasks.", 35.0)
-        except Exception as e:
-            yield make_event("planning", "failed", f"Planning failed: {e}", 100.0)
-            return
-
-        # Stage 3: DAG routing & Execution
-        yield make_event("dag_routing", "started", f"Executing DAG Plan under mode: {plan.execution_mode.value}", 40.0)
-        
-        from app.ai_system.orchestrator.pipeline_registry import PIPELINE_REGISTRY
-        completed_results = {}
-        
-        # Execute each task in order
-        total_tasks = len(plan.tasks)
-        for idx, task in enumerate(plan.tasks):
-            t_progress = 40.0 + ((idx / total_tasks) * 50.0)
-            yield make_event(task.type.value, "started", f"Starting task {task.task_id} ({task.type.value})", t_progress, task.task_id)
-            
-            pipeline_fn = PIPELINE_REGISTRY.get(task.type.value)
-            if not pipeline_fn:
-                yield make_event(task.type.value, "failed", f"No pipeline runner registered for task type '{task.type.value}'", 100.0, task.task_id)
-                return
-                
+        async def run_pipeline():
             try:
-                # Execute pipeline step
-                result = await pipeline_fn(task, request, completed_results)
-                completed_results[task.task_id] = result
-                yield make_event(task.type.value, "completed", f"Completed task {task.task_id}.", t_progress + (50.0 / total_tasks), task.task_id)
-            except Exception as e:
-                yield make_event(task.type.value, "failed", f"Task execution failed: {e}", t_progress + (50.0 / total_tasks), task.task_id)
-                # Determine if fatal: if it's the primary intent or if it's the only task in the plan
-                is_fatal = (task.type == plan.primary_intent) or (total_tasks == 1)
-                if is_fatal:
-                    return
-                logger.warning(f"Non-fatal task {task.task_id} failed: {e}")
-                
-        # Stage 4: Finished (yield final result payload)
-        last_res = list(completed_results.values())[-1] if completed_results else None
-        res_data = {}
-        if last_res:
-            res_data["content"] = last_res.content
-            if last_res.citations:
-                res_data["citations"] = [
-                    {
-                        "chunk_id": c.chunk_id,
-                        "page_number": c.page_number,
-                        "section_title": c.section_title,
-                        "score": c.score
-                    } for c in last_res.citations
-                ]
-        yield make_event("completed", "completed", "Search query DAG execution completed successfully.", 100.0, data=res_data)
+                # 1. Emit start event
+                await emit_stage_event(PublicAIStage.REQUEST_RECEIVED, StageStatus.STARTED, progress=0.0)
+
+                # 2. Run the main query pipeline synchronously relative to this generator task
+                response = await ai_orchestrator_service.execute_query(
+                    document_id=document_id,
+                    request=request,
+                    user_id=current_user_id
+                )
+
+                # 3. Emit final completed event containing content and citations
+                citations_list = []
+                if response.citations:
+                    citations_list = [
+                        {
+                            "chunk_id": c.chunk_id,
+                            "page_number": c.page_number,
+                            "section_title": c.section_title,
+                            "score": c.score
+                        } for c in response.citations
+                    ]
+
+                await emit_stage_event(
+                    stage=PublicAIStage.COMPLETED,
+                    status=StageStatus.COMPLETED,
+                    progress=100.0,
+                    content=response.message,
+                    citations=citations_list,
+                    confidence=response.confidence
+                )
+            except Exception as ex:
+                logger.exception("Error executing pipeline stream")
+                await emit_stage_event(
+                    stage=PublicAIStage.FAILED,
+                    status=StageStatus.FAILED,
+                    progress=100.0,
+                    message=f"Pipeline error: {str(ex)}"
+                )
+            finally:
+                # Put None to signal end of stream
+                await event_queue.put(None)
+
+        task = asyncio.create_task(run_pipeline())
+
+        try:
+            while True:
+                event = await event_queue.get()
+                if event is None:
+                    break
+                yield event.model_dump_json() + "\n"
+        except asyncio.CancelledError:
+            # Client cancelled or disconnected
+            task.cancel()
+            await emit_stage_event(PublicAIStage.CANCELLED, StageStatus.CANCELLED, "Request cancelled by client.", 100.0)
+            raise
+        finally:
+            clear_current_emitter()
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
 
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 

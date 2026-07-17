@@ -34,10 +34,16 @@ class AIOrchestratorService:
         trace_stages = pipeline_state.trace_stages
         
         # 1. Document Guard
+        from app.ai_system.streaming.stage_emitter import emit_stage_event
+        from app.ai_system.streaming.stage_events import PublicAIStage, StageStatus
+
         try:
+            await emit_stage_event(PublicAIStage.DOCUMENT_CHECK, StageStatus.STARTED, progress=5.0)
             await validate_document_access(document_id, user_id)
+            await emit_stage_event(PublicAIStage.DOCUMENT_CHECK, StageStatus.COMPLETED, progress=10.0)
             trace_stages.append({"stage": "document_guard", "status": "passed"})
         except Exception as e:
+            await emit_stage_event(PublicAIStage.DOCUMENT_CHECK, StageStatus.FAILED, f"Document access denied: {e}", progress=10.0)
             trace_stages.append({"stage": "document_guard", "status": "failed", "error": str(e)})
             raise
             
@@ -56,11 +62,13 @@ class AIOrchestratorService:
         from app.ai_system.validation.verifier import verify_response
         from app.schemas.ai_schema import ExecutionMode
         
+        await emit_stage_event(PublicAIStage.INPUT_ANALYSIS, StageStatus.STARTED, progress=12.0)
         validation_result = await validate_input(
             raw_text=query_text,
             document_id=document_id,
             user_id=user_id
         )
+        await emit_stage_event(PublicAIStage.INPUT_ANALYSIS, StageStatus.COMPLETED, progress=18.0)
         
         # Store validation result in pipeline state and raw request (for backward compat)
         pipeline_state.input_validation = validation_result
@@ -99,6 +107,15 @@ class AIOrchestratorService:
                 "strategy": validation_result.response_strategy.value
             })
             
+            # For early response paths: skip irrelevant stages and emit completed
+            await emit_stage_event(
+                stage=PublicAIStage.COMPLETED,
+                status=StageStatus.COMPLETED,
+                progress=100.0,
+                content=verification.final_answer or composed_text,
+                citations=[]
+            )
+
             return AIResponse(
                 status=status_str,
                 message=verification.final_answer or composed_text,
@@ -131,6 +148,15 @@ class AIOrchestratorService:
                 "status": "completed"
             })
             
+            # Emit completed early for metadata route
+            await emit_stage_event(
+                stage=PublicAIStage.COMPLETED,
+                status=StageStatus.COMPLETED,
+                progress=100.0,
+                content=verification.final_answer or metadata_answer,
+                citations=[]
+            )
+
             return AIResponse(
                 status="success",
                 message=verification.final_answer or metadata_answer,

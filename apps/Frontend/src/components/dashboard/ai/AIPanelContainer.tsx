@@ -87,6 +87,10 @@ export const AIPanelContainer: React.FC<AIPanelContainerProps> = ({
     streamStatus,
     activeCitations,
     currentAssistantText,
+    completedStages,
+    activeNodes,
+    publicRequestSummary,
+    stageMetadata,
     sendMessage,
     stopStreaming,
     startNewChat,
@@ -201,12 +205,12 @@ export const AIPanelContainer: React.FC<AIPanelContainerProps> = ({
                 activeCitations={activeCitations}
                 isSending={isSending}
                 isLoadingHistory={isLoadingHistory}
-              />
-
-              <PipelineStatus
-                stage={streamStage}
-                progress={streamProgress}
-                status={streamStatus}
+                streamStage={streamStage}
+                streamProgress={streamProgress}
+                streamStatus={streamStatus}
+                completedStages={completedStages}
+                publicRequestSummary={publicRequestSummary}
+                stageMetadata={stageMetadata}
               />
 
               <ChatComposer

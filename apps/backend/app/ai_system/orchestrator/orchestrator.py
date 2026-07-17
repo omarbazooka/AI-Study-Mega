@@ -42,6 +42,11 @@ class TaskOrchestrator:
                 metadata={"mock": True}
             )
 
+        request._total_task_count = len(plan.tasks)
+        from app.ai_system.streaming.stage_emitter import emit_stage_event
+        from app.ai_system.streaming.stage_events import PublicAIStage, StageStatus
+        await emit_stage_event(PublicAIStage.PLANNING, StageStatus.COMPLETED, progress=40.0)
+
         completed_results: Dict[str, TaskResult] = {}
         pending_tasks = list(plan.tasks)
 
@@ -122,9 +127,29 @@ class TaskOrchestrator:
 
     async def _execute_task(self, task: Task, request: Any, previous_results: Optional[Dict[str, TaskResult]] = None) -> TaskResult:
         """Executes a single task by routing it to its registered pipeline wrapper."""
+        from app.ai_system.streaming.stage_emitter import emit_stage_event
+        from app.ai_system.streaming.stage_events import StageStatus
+        from app.ai_system.streaming.stage_mapper import map_task_type_to_stage
+
+        completed_task_count = len(previous_results) if previous_results else 0
+        total_task_count = getattr(request, "_total_task_count", 1) or 1
+        stage = map_task_type_to_stage(task.type)
+
+        await emit_stage_event(
+            stage=stage,
+            status=StageStatus.STARTED,
+            node_id=task.task_id,
+            progress=40.0 + (completed_task_count / total_task_count) * 45.0,
+            metadata={
+                "task_type": task.type.value,
+                "completed_task_count": completed_task_count,
+                "total_task_count": total_task_count
+            }
+        )
+
         pipeline_fn = PIPELINE_REGISTRY.get(task.type.value)
         if not pipeline_fn:
-            return TaskResult(
+            res = TaskResult(
                 task_id=task.task_id,
                 type=task.type,
                 status="failed",
@@ -134,6 +159,18 @@ class TaskOrchestrator:
                 error=f"No pipeline registered for task type: '{task.type.value}'",
                 metadata={"mock": False}
             )
+            await emit_stage_event(
+                stage=stage,
+                status=StageStatus.FAILED,
+                node_id=task.task_id,
+                progress=40.0 + ((completed_task_count + 1) / total_task_count) * 45.0,
+                metadata={
+                    "task_type": task.type.value,
+                    "completed_task_count": completed_task_count + 1,
+                    "total_task_count": total_task_count
+                }
+            )
+            return res
         
         try:
             # Inject optional parameters from task metadata to request
@@ -145,9 +182,33 @@ class TaskOrchestrator:
                     except Exception:
                         pass
 
-            return await pipeline_fn(task, request, previous_results)
+            result = await pipeline_fn(task, request, previous_results)
+            
+            await emit_stage_event(
+                stage=stage,
+                status=StageStatus.COMPLETED if result.status == "success" else StageStatus.FAILED,
+                node_id=task.task_id,
+                progress=40.0 + ((completed_task_count + 1) / total_task_count) * 45.0,
+                metadata={
+                    "task_type": task.type.value,
+                    "completed_task_count": completed_task_count + 1,
+                    "total_task_count": total_task_count
+                }
+            )
+            return result
         except Exception as e:
             logger.exception("Task execution failed")
+            await emit_stage_event(
+                stage=stage,
+                status=StageStatus.FAILED,
+                node_id=task.task_id,
+                progress=40.0 + ((completed_task_count + 1) / total_task_count) * 45.0,
+                metadata={
+                    "task_type": task.type.value,
+                    "completed_task_count": completed_task_count + 1,
+                    "total_task_count": total_task_count
+                }
+            )
             return TaskResult(
                 task_id=task.task_id,
                 type=task.type,
