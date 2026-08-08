@@ -14,7 +14,7 @@ import { SummaryView } from "./SummaryView";
 import { QuizView } from "./QuizView";
 import { HistoryView } from "./HistoryView";
 
-import { MessageSquare, FileText, Award, Clock, Plus } from "lucide-react";
+import { MessageSquare, FileText, Award, Clock, Plus, AlertTriangle } from "lucide-react";
 
 const detectLanguage = (text: string): "ar" | "en" => {
   const arabicRegex = /[\u0600-\u06FF]/;
@@ -42,6 +42,7 @@ export const AIPanelContainer: React.FC<AIPanelContainerProps> = ({
   const {
     documents,
     isLoading: isDocsLoading,
+    error: documentsError,
     activeDocumentId,
     activeDocument,
     setActiveDocumentId,
@@ -102,6 +103,20 @@ export const AIPanelContainer: React.FC<AIPanelContainerProps> = ({
 
   return (
     <aside className="w-[420px] h-[calc(100vh-40px)] ml-0 bg-background/20 backdrop-blur-sm border border-[#666565]/50 rounded-lg flex flex-col m-[20px] relative shrink-0 overflow-hidden shadow-2xl">
+      {documentsError && (
+        <div className="mx-3 mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+            <div>
+              <p className="font-semibold">AI backend is not authenticated yet.</p>
+              <p className="mt-1 break-words text-amber-100/75">
+                {documentsError.message || "The AI service rejected the current session. Your note is safe and remains open."}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Document Controls & Upload ───────────────────────── */}
       <DocumentControls
         documents={documents}
@@ -215,7 +230,7 @@ export const AIPanelContainer: React.FC<AIPanelContainerProps> = ({
               <ChatComposer
                 onSend={(txt) => sendMessage(txt, detectLanguage(txt))}
                 isSending={isSending}
-                disabled={!isReady || isDocsLoading}
+                disabled={!isReady || isDocsLoading || Boolean(documentsError)}
                 onStop={stopStreaming}
               />
             </>
@@ -227,7 +242,7 @@ export const AIPanelContainer: React.FC<AIPanelContainerProps> = ({
         <SummaryView
           documentId={activeDocumentId}
           sessionId={sessionId || "summary-session"}
-          disabled={!isReady}
+          disabled={!isReady || Boolean(documentsError)}
           activePageId={activePageId}
           activePageTitle={activePageTitle}
           activePageContent={activePageContent}
@@ -240,7 +255,7 @@ export const AIPanelContainer: React.FC<AIPanelContainerProps> = ({
         <QuizView
           documentId={activeDocumentId}
           sessionId={sessionId || "quiz-session"}
-          disabled={!isReady}
+          disabled={!isReady || Boolean(documentsError)}
         />
       )}
     </aside>
