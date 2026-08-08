@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import type { User } from "@supabase/supabase-js";
 import DashboardContent from "../DashboardContent";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardTrashPage() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
