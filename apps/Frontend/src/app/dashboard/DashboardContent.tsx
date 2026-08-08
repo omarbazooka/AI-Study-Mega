@@ -280,7 +280,6 @@ export default function DashboardContent({ user, initialView = "home" }: Dashboa
     if (!preventSwitch) {
       setActivePageId(newPage.id);
       setActiveView("page");
-      router.push("/dashboard");
     }
 
     // Persist new page to DB
@@ -305,7 +304,6 @@ export default function DashboardContent({ user, initialView = "home" }: Dashboa
   const selectPage = (id: string) => {
     setActivePageId(id);
     setActiveView("page");
-    router.push("/dashboard");
   };
 
   const router = useRouter();
