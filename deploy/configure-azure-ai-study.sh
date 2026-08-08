@@ -6,13 +6,13 @@ APP_NAME="${APP_NAME:-ai-study-api}"
 STORAGE_BUCKET="${SUPABASE_STORAGE_BUCKET:-study-documents}"
 
 if ! az account show >/dev/null 2>&1; then
-  echo "Azure CLI is not signed in. Run: az login"
+  echo "Azure CLI is not signed in. Open Azure Cloud Shell or run: az login"
   exit 1
 fi
 
 if ! az containerapp show -g "$RESOURCE_GROUP" -n "$APP_NAME" >/dev/null 2>&1; then
   echo "Container App '$APP_NAME' was not found in resource group '$RESOURCE_GROUP'."
-  echo "Run the Azure DevOps deployment pipeline first."
+  echo "Deploy the backend container first, then run this script again."
   exit 1
 fi
 
@@ -37,7 +37,7 @@ az containerapp secret set \
     cloudflare-api-token="$CLOUDFLARE_API_TOKEN" \
   >/dev/null
 
-echo "Configuring production environment variables..."
+echo "Configuring production environment variables and scale-to-zero..."
 az containerapp update \
   -g "$RESOURCE_GROUP" \
   -n "$APP_NAME" \
@@ -52,6 +52,8 @@ az containerapp update \
     CLOUDFLARE_ACCOUNT_ID="$CLOUDFLARE_ACCOUNT_ID" \
     CLOUDFLARE_API_TOKEN=secretref:cloudflare-api-token \
     CORS_ALLOWED_ORIGINS="$CORS_ALLOWED_ORIGINS" \
+  --min-replicas 0 \
+  --max-replicas 1 \
   >/dev/null
 
 unset SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY GROQ_DEFAULT_API_KEY CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN CORS_ALLOWED_ORIGINS
