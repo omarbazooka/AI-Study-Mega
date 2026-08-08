@@ -19,43 +19,96 @@ variables:
   containerAppName: ai-study-api
   imageName: ai-study-api
 
-steps:
-  - checkout: self
-    clean: true
+stages:
+  - stage: BuildAndPush
+    displayName: Build and push backend image
+    jobs:
+      - job: Build
+        steps:
+          - checkout: self
+            clean: true
 
-  - task: AzureContainerApps@1
-    displayName: Build and deploy AI Study backend
-    inputs:
-      azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
-      appSourcePath: '$(Build.SourcesDirectory)/apps/backend'
-      dockerfilePath: '$(Build.SourcesDirectory)/apps/backend/Dockerfile'
-      acrName: '$(acrName)'
-      imageToBuild: '$(acrName).azurecr.io/$(imageName):$(Build.BuildId)'
-      containerAppName: '$(containerAppName)'
-      resourceGroup: '$(resourceGroup)'
-      containerAppEnvironment: '$(containerAppEnvironment)'
-      targetPort: '8080'
-      ingress: external
+          - task: AzureCLI@2
+            displayName: Build Docker image and push to ACR
+            inputs:
+              azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                LOGIN_SERVER=$(az acr show -n "$(acrName)" --query loginServer -o tsv)
+                az acr login -n "$(acrName)"
 
-  - task: AzureCLI@2
-    displayName: Configure scale-to-zero
-    inputs:
-      azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
-      scriptType: bash
-      scriptLocation: inlineScript
-      inlineScript: |
-        set -euo pipefail
-        az extension add --name containerapp --upgrade --yes >/dev/null 2>&1 || true
-        az containerapp update \
-          --name "$(containerAppName)" \
-          --resource-group "$(resourceGroup)" \
-          --min-replicas 0 \
-          --max-replicas 1 >/dev/null
+                docker build \
+                  -t "$LOGIN_SERVER/$(imageName):$(Build.BuildId)" \
+                  -t "$LOGIN_SERVER/$(imageName):latest" \
+                  "$(Build.SourcesDirectory)/apps/backend"
 
-        FQDN=$(az containerapp show \
-          --name "$(containerAppName)" \
-          --resource-group "$(resourceGroup)" \
-          --query properties.configuration.ingress.fqdn \
-          --output tsv)
+                docker push "$LOGIN_SERVER/$(imageName):$(Build.BuildId)"
+                docker push "$LOGIN_SERVER/$(imageName):latest"
 
-        echo "AI Study backend: https://${FQDN}"
+  - stage: Deploy
+    displayName: Deploy Azure Container App
+    dependsOn: BuildAndPush
+    jobs:
+      - job: DeployBackend
+        steps:
+          - checkout: self
+            clean: true
+
+          - task: AzureCLI@2
+            displayName: Create or update AI Study backend
+            inputs:
+              azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                az extension add --name containerapp --upgrade --yes >/dev/null 2>&1 || true
+
+                LOGIN_SERVER=$(az acr show -n "$(acrName)" --query loginServer -o tsv)
+                IMAGE="$LOGIN_SERVER/$(imageName):$(Build.BuildId)"
+                ACR_USER=$(az acr credential show -n "$(acrName)" --query username -o tsv)
+                ACR_PASS=$(az acr credential show -n "$(acrName)" --query 'passwords[0].value' -o tsv)
+
+                if az containerapp show -g "$(resourceGroup)" -n "$(containerAppName)" >/dev/null 2>&1; then
+                  az containerapp registry set \
+                    -g "$(resourceGroup)" \
+                    -n "$(containerAppName)" \
+                    --server "$LOGIN_SERVER" \
+                    --username "$ACR_USER" \
+                    --password "$ACR_PASS" >/dev/null
+
+                  az containerapp update \
+                    -g "$(resourceGroup)" \
+                    -n "$(containerAppName)" \
+                    --image "$IMAGE" \
+                    --min-replicas 0 \
+                    --max-replicas 1 \
+                    --cpu 1.0 \
+                    --memory 2Gi >/dev/null
+                else
+                  az containerapp create \
+                    -g "$(resourceGroup)" \
+                    -n "$(containerAppName)" \
+                    --environment "$(containerAppEnvironment)" \
+                    --image "$IMAGE" \
+                    --registry-server "$LOGIN_SERVER" \
+                    --registry-username "$ACR_USER" \
+                    --registry-password "$ACR_PASS" \
+                    --target-port 8080 \
+                    --ingress external \
+                    --min-replicas 0 \
+                    --max-replicas 1 \
+                    --cpu 1.0 \
+                    --memory 2Gi >/dev/null
+                fi
+
+                FQDN=$(az containerapp show \
+                  -g "$(resourceGroup)" \
+                  -n "$(containerAppName)" \
+                  --query properties.configuration.ingress.fqdn \
+                  -o tsv)
+
+                echo "AI Study backend: https://${FQDN}"
+                echo "Next step: configure runtime secrets using deploy/configure-azure-ai-study.sh"
