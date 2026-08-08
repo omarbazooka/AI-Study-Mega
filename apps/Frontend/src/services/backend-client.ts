@@ -2,7 +2,9 @@
 import { createClient } from "@/lib/supabase/client";
 import { ApiError } from "@/types/api/common";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://ai-study-api.redstone-7dd5a6fe.italynorth.azurecontainerapps.io";
 
 async function getSessionToken(): Promise<string | null> {
   if (typeof window === "undefined") return null;
