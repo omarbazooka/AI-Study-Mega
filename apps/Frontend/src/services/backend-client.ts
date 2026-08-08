@@ -23,12 +23,6 @@ async function refreshSessionToken(): Promise<string | null> {
   return session.access_token;
 }
 
-function handleRedirectToLogin() {
-  if (typeof window !== "undefined") {
-    window.location.href = "/auth/login";
-  }
-}
-
 async function normalizeError(response: Response): Promise<ApiError> {
   let details: any = null;
   let message = "An error occurred while communicating with the server.";
@@ -40,7 +34,6 @@ async function normalizeError(response: Response): Promise<ApiError> {
       if (typeof errorData.detail === "string") {
         message = errorData.detail;
       } else if (Array.isArray(errorData.detail)) {
-        // Validation errors
         message = errorData.detail.map((d: any) => d.msg).join(", ");
         details = errorData.detail;
       } else if (errorData.detail?.message) {
@@ -80,14 +73,11 @@ async function request(path: string, options: RequestOptions = {}, isRetry = fal
 
   const url = `${API_URL}${path}`;
   const headers = new Headers(options.headers || {});
-  
   headers.set("Authorization", `Bearer ${token}`);
-  
+
   let body = options.body;
   if (body) {
-    if (body instanceof FormData) {
-      // Do NOT set Content-Type, boundary is automatically added by browser
-    } else {
+    if (!(body instanceof FormData)) {
       headers.set("Content-Type", "application/json");
       body = JSON.stringify(body);
     }
@@ -107,18 +97,21 @@ async function request(path: string, options: RequestOptions = {}, isRetry = fal
         const newToken = await refreshSessionToken();
         if (newToken) {
           return request(path, options, true);
-        } else {
-          handleRedirectToLogin();
-          throw {
-            status: 401,
-            code: "UNAUTHORIZED",
-            message: "Session expired. Please log in again.",
-          } as ApiError;
         }
-      } else {
-        handleRedirectToLogin();
-        throw await normalizeError(response);
       }
+
+      // Important: never hard-redirect to /auth/login from a backend API 401.
+      // The Supabase browser session can still be valid while the Azure backend
+      // is misconfigured. Redirecting created a login -> dashboard loop that
+      // kicked users out of open notes whenever the AI panel mounted.
+      const error = await normalizeError(response);
+      throw {
+        ...error,
+        code: "BACKEND_AUTH_REJECTED",
+        message:
+          error.message ||
+          "The AI backend rejected the current session. Your note remains open; please retry after backend configuration is fixed.",
+      } as ApiError;
     }
 
     if (!response.ok) {
