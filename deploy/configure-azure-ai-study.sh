@@ -4,6 +4,7 @@ set -euo pipefail
 RESOURCE_GROUP="${RESOURCE_GROUP:-nabdak-rg}"
 APP_NAME="${APP_NAME:-ai-study-api}"
 STORAGE_BUCKET="${SUPABASE_STORAGE_BUCKET:-study-documents}"
+DEFAULT_FRONTEND_ORIGIN="${FRONTEND_ORIGIN:-https://ai-study-mega.vercel.app}"
 
 if ! az account show >/dev/null 2>&1; then
   echo "Azure CLI is not signed in. Open Azure Cloud Shell or run: az login"
@@ -24,8 +25,8 @@ echo
 read -r -p "CLOUDFLARE_ACCOUNT_ID: " CLOUDFLARE_ACCOUNT_ID
 read -s -r -p "CLOUDFLARE_API_TOKEN: " CLOUDFLARE_API_TOKEN
 echo
-read -r -p "Frontend origin (use * until Vercel URL is ready): " CORS_ALLOWED_ORIGINS
-CORS_ALLOWED_ORIGINS="${CORS_ALLOWED_ORIGINS:-*}"
+read -r -p "Frontend origin [$DEFAULT_FRONTEND_ORIGIN]: " CORS_ALLOWED_ORIGINS
+CORS_ALLOWED_ORIGINS="${CORS_ALLOWED_ORIGINS:-$DEFAULT_FRONTEND_ORIGIN}"
 
 echo "Saving backend-only credentials as Azure Container App secrets..."
 az containerapp secret set \
