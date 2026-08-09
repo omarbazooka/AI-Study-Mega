@@ -4,6 +4,7 @@ set -euo pipefail
 RESOURCE_GROUP="${RESOURCE_GROUP:-nabdak-rg}"
 APP_NAME="${APP_NAME:-ai-study-api}"
 IMAGE="${IMAGE:-ghcr.io/omarbazooka/ai-study-api:azure-latest}"
+GHCR_USERNAME="${GHCR_USERNAME:-omarbazooka}"
 
 if ! az account show >/dev/null 2>&1; then
   echo "Azure CLI is not signed in. Use Azure Cloud Shell or run az login."
@@ -15,17 +16,40 @@ if ! az containerapp show -g "$RESOURCE_GROUP" -n "$APP_NAME" >/dev/null 2>&1; t
   exit 1
 fi
 
-echo "Switching Azure Container App to prebuilt GitHub Container Registry image."
+echo "Configuring Azure Container App to pull the private GHCR image."
 echo "Image: $IMAGE"
+echo "GitHub user: $GHCR_USERNAME"
+echo
+read -s -r -p "GitHub PAT classic with read:packages: " GHCR_TOKEN
+echo
 
+if [[ -z "$GHCR_TOKEN" ]]; then
+  echo "No GitHub token was entered. Nothing changed."
+  exit 1
+fi
+
+echo "Saving GHCR pull credentials in Azure Container Apps..."
+az containerapp registry set \
+  -g "$RESOURCE_GROUP" \
+  -n "$APP_NAME" \
+  --server ghcr.io \
+  --username "$GHCR_USERNAME" \
+  --password "$GHCR_TOKEN" \
+  --only-show-errors \
+  >/dev/null
+
+unset GHCR_TOKEN
+
+echo "Switching Azure Container App to the prebuilt GHCR image..."
 az containerapp update \
   -g "$RESOURCE_GROUP" \
   -n "$APP_NAME" \
   --image "$IMAGE" \
+  --only-show-errors \
   >/dev/null
 
 echo "Waiting for the newest revision to become ready..."
-for _ in $(seq 1 40); do
+for _ in $(seq 1 50); do
   READY_REVISION=$(az containerapp show -g "$RESOURCE_GROUP" -n "$APP_NAME" --query properties.latestReadyRevisionName -o tsv 2>/dev/null || true)
   LATEST_REVISION=$(az containerapp show -g "$RESOURCE_GROUP" -n "$APP_NAME" --query properties.latestRevisionName -o tsv 2>/dev/null || true)
   if [[ -n "$LATEST_REVISION" && "$READY_REVISION" == "$LATEST_REVISION" ]]; then
@@ -50,6 +74,6 @@ curl -fsS "https://$FQDN/" || true
 echo
 
 if [[ "$LATEST_REVISION" != "$READY_REVISION" ]]; then
-  echo "WARNING: The new revision is not ready. If Azure reports UNAUTHORIZED while pulling GHCR, make the ai-study-api package public in GitHub Packages and rerun this script."
+  echo "ERROR: The new revision did not become ready."
   exit 2
 fi
