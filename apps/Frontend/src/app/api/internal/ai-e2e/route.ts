@@ -5,7 +5,7 @@ import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "@/lib/supabase/config";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const BACKEND = "https://back-end-production-7371.up.railway.app";
+const BACKEND = "https://ai-study-api.redstone-7dd5a6fe.italynorth.azurecontainerapps.io";
 const TEST_EMAIL = "ai.study.e2e.20260809@gmail.com";
 const TEST_PASSWORD = "E2E-only-4Yp!82kQ";
 const DOCUMENT_ID = "11111111-2222-4333-8444-555555555555";
