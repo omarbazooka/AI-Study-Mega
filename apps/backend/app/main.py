@@ -44,19 +44,22 @@ async def root():
 async def temporary_llm_health(probe_key: str):
     if probe_key != "llm-probe-93fd2b":
         raise HTTPException(status_code=404, detail="Not found")
-    from app.ai_system.services.llm.model_router import resolve_config_for_role, LLMRole
     from app.ai_system.services.llm.providers.groq_provider import GroqProvider
     try:
-        api_key, model = resolve_config_for_role(LLMRole.EXECUTOR)
         result = await GroqProvider().generate(
-            model=model,
+            model="openai/gpt-oss-120b",
             prompt="Reply with exactly: LLM_OK",
             temperature=0,
             max_tokens=16,
-            api_key=api_key,
+            api_key="",
             profile="execution_reduce",
         )
-        return {"ok": True, "model": model, "text": result.get("text", "")}
+        return {
+            "ok": True,
+            "provider": result.get("provider"),
+            "model": result.get("model"),
+            "text": result.get("text", "")
+        }
     except Exception as exc:
         return {"ok": False, "error_type": type(exc).__name__, "message": str(exc)}
 
